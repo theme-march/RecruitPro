@@ -3,6 +3,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { Package } from "../types";
 import { Layers, Plus, Edit2, Check, X, Trash2 } from "lucide-react";
+import SearchInput from "../components/SearchInput";
 import { motion } from "motion/react";
 import { log } from "console";
 
@@ -166,15 +167,13 @@ const PackageManagement: React.FC = () => {
               Package Management
             </h1>
           </div>
-          <input
-            type="text"
-            placeholder="Search packages..."
-            className="mt-2 md:mt-0 px-4 py-2 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+          <SearchInput
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
+            placeholder="Search packages..."
           />
         </div>
         <p className="text-slate-500">

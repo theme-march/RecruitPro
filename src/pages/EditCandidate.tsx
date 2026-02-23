@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import { ArrowLeft, Save, Upload } from "lucide-react";
+import { ArrowLeft, Save, Upload, Edit2 } from "lucide-react";
+import AssignAgentModal from "../components/AssignAgentModal";
 
 const EditCandidate: React.FC = () => {
   const { id } = useParams();
@@ -10,6 +11,13 @@ const EditCandidate: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [userRole, setUserRole] = useState<string>("");
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [candidateAgent, setCandidateAgent] = useState<{
+    agent_id: number;
+    agent_name: string;
+  }>({ agent_id: 0, agent_name: "" });
+
   const [formData, setFormData] = useState({
     name: "",
     passport_number: "",
@@ -19,9 +27,11 @@ const EditCandidate: React.FC = () => {
     package_amount: "",
     status: "",
   });
+
   const [packages, setPackages] = useState<
     { id: number; name: string; amount: number }[]
   >([]);
+
   const [files, setFiles] = useState<{
     passport_copy: File | null;
     cv: File | null;
@@ -44,6 +54,10 @@ const EditCandidate: React.FC = () => {
           package_amount: c.package_amount.toString(),
           status: c.status,
         });
+        setCandidateAgent({
+          agent_id: c.agent_id || 0,
+          agent_name: c.agent_name || "Unknown",
+        });
       } catch (err) {
         console.error(err);
         alert("Failed to fetch candidate data");
@@ -62,6 +76,9 @@ const EditCandidate: React.FC = () => {
         console.error("Failed to fetch packages", err);
       }
     };
+
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserRole(userData.role || "");
 
     fetchCandidate();
     fetchPackages();
@@ -127,6 +144,29 @@ const EditCandidate: React.FC = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-8">
+          {["super_admin", "admin"].includes(userRole) && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-blue-900">
+                    Agent Assignment
+                  </p>
+                  <p className="text-lg font-semibold text-blue-900 mt-1">
+                    {candidateAgent.agent_name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAssignModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                >
+                  <Edit2 className="w-4 h-4" />
+                  Reassign
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
@@ -304,6 +344,20 @@ const EditCandidate: React.FC = () => {
           </div>
         </form>
       </div>
+
+      {candidateAgent && (
+        <AssignAgentModal
+          candidateId={parseInt(id || "0")}
+          candidateName={formData.name}
+          currentAgentId={candidateAgent.agent_id}
+          currentAgentName={candidateAgent.agent_name}
+          isOpen={assignModalOpen}
+          onClose={() => setAssignModalOpen(false)}
+          onAssign={() => {
+            window.location.reload();
+          }}
+        />
+      )}
     </div>
   );
 };

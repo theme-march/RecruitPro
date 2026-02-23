@@ -30,8 +30,11 @@ router.get('/', authenticateToken, async (req: any, res) => {
     let params: any[] = [];
     let countQuery = '';
 
-    if (req.user.role === 'agent') {
-      baseQuery = `SELECT * FROM candidates WHERE agent_id = ?`;
+      const isAgent = req.user.role === 'agent';
+
+    if (isAgent) {
+      // always use alias `c` so subsequent clauses can refer to it uniformly
+      baseQuery = `SELECT c.* FROM candidates c WHERE agent_id = ?`;
       params.push(req.user.id);
     } else {
       baseQuery = `
@@ -47,13 +50,14 @@ router.get('/', authenticateToken, async (req: any, res) => {
       params.push(`%${search}%`, `%${search}%`);
     }
 
+    // now that `c` alias is always defined, ordering is consistent
     const dataQuery = `${baseQuery} ORDER BY c.created_at DESC LIMIT ? OFFSET ?`;
     const rows = await query<any>(dataQuery, [...params, limit, offset]);
 
-    if (req.user.role === 'agent') {
-      countQuery = 'SELECT COUNT(*) as cnt FROM candidates WHERE agent_id = ?';
+    if (isAgent) {
+      countQuery = 'SELECT COUNT(*) as cnt FROM candidates c WHERE agent_id = ?';
       if (search) {
-        countQuery += ' AND (name LIKE ? OR passport_number LIKE ?)';
+        countQuery += ' AND (c.name LIKE ? OR c.passport_number LIKE ?)';
       }
     } else {
       countQuery = `
@@ -80,11 +84,25 @@ router.get('/', authenticateToken, async (req: any, res) => {
 // Get single candidate
 router.get('/:id', authenticateToken, async (req: any, res) => {
   try {
-    const candidates: Candidate[] = await query<Candidate[]>('SELECT * FROM candidates WHERE id = ?', [req.params.id]);
+    const isAgent = req.user.role === 'agent';
+    
+    let queryStr = '';
+    if (isAgent) {
+      queryStr = 'SELECT * FROM candidates WHERE id = ?';
+    } else {
+      queryStr = `
+        SELECT c.*, u.name as agent_name
+        FROM candidates c
+        LEFT JOIN users u ON c.agent_id = u.id
+        WHERE c.id = ?
+      `;
+    }
+    
+    const candidates: any = await query<any>(queryStr, [req.params.id]);
     const candidate = candidates[0];
     if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
 
-    if (req.user.role === 'agent' && candidate.agent_id !== req.user.id) {
+    if (isAgent && candidate.agent_id !== req.user.id) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -190,6 +208,35 @@ router.put(
     } catch (error) {
       console.error('Update Candidate Error:', error);
       res.status(500).json({ message: 'Failed to update candidate' });
+    }
+  }
+);
+
+// Reassign candidate to different agent (Admin only)
+router.put(
+  '/:id/assign-agent',
+  authenticateToken,
+  authorizeRoles('super_admin', 'admin'),
+  async (req: any, res) => {
+    try {
+      const { candidateId, newAgentId } = req.body;
+
+      const candidates: Candidate[] = await query<Candidate[]>(
+        'SELECT * FROM candidates WHERE id = ?',
+        [candidateId]
+      );
+      const candidate = candidates[0];
+      if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+
+      await query(
+        'UPDATE candidates SET agent_id = ? WHERE id = ?',
+        [newAgentId, candidateId]
+      );
+
+      res.json({ message: 'Candidate reassigned successfully' });
+    } catch (error) {
+      console.error('Assign Agent Error:', error);
+      res.status(500).json({ message: 'Failed to reassign candidate' });
     }
   }
 );
