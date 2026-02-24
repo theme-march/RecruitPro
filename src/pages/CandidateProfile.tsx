@@ -4,13 +4,11 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
-  DollarSign,
-  CreditCard,
-  Calendar,
   FileText,
   Download,
   Plus,
   Edit2,
+  Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
@@ -51,6 +49,17 @@ const CandidateProfile: React.FC = () => {
     }
   };
 
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!confirm("Are you sure you want to delete this document?")) return;
+
+    try {
+      await api.delete(`/candidates/${id}/documents/${documentId}`);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete document");
+    }
+  };
+
   const handleDownloadReceipt = async (tranId: string) => {
     if (!tranId) {
       alert("No Transaction ID found for this payment.");
@@ -62,14 +71,12 @@ const CandidateProfile: React.FC = () => {
       const payment = response.data;
 
       const doc = new jsPDF();
-
-      // Header
       doc.setFontSize(22);
-      doc.setTextColor(79, 70, 229); // Indigo-600
+      doc.setTextColor(79, 70, 229);
       doc.text("PAYMENT RECEIPT", 105, 20, { align: "center" });
 
       doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.setTextColor(100, 116, 139);
       doc.text(
         `Date: ${new Date(payment.created_at).toLocaleDateString()}`,
         20,
@@ -78,21 +85,18 @@ const CandidateProfile: React.FC = () => {
       doc.text(`Receipt No: #REC-${payment.id}`, 20, 40);
       doc.text(`Transaction ID: ${payment.transaction_id}`, 20, 45);
 
-      // Divider
-      doc.setDrawColor(226, 232, 240); // Slate-200
+      doc.setDrawColor(226, 232, 240);
       doc.line(20, 55, 190, 55);
 
-      // Candidate Info
       doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42); // Slate-900
+      doc.setTextColor(15, 23, 42);
       doc.text("Candidate Details:", 20, 65);
       doc.setFontSize(10);
-      doc.setTextColor(51, 65, 85); // Slate-700
+      doc.setTextColor(51, 65, 85);
       doc.text(`Name: ${payment.candidate_name}`, 20, 72);
       doc.text(`Phone: ${payment.candidate_phone}`, 20, 77);
       doc.text(`Email: ${payment.candidate_email}`, 20, 82);
 
-      // Payment Info Table
       autoTable(doc, {
         startY: 95,
         head: [["Description", "Method", "Amount"]],
@@ -108,7 +112,6 @@ const CandidateProfile: React.FC = () => {
         styles: { fontSize: 10, cellPadding: 5 },
       });
 
-      // Summary
       const finalY = (doc as any).lastAutoTable.finalY + 15;
       doc.setFontSize(12);
       doc.setTextColor(15, 23, 42);
@@ -119,9 +122,8 @@ const CandidateProfile: React.FC = () => {
         { align: "right" },
       );
 
-      // Footer
       doc.setFontSize(10);
-      doc.setTextColor(148, 163, 184); // Slate-400
+      doc.setTextColor(148, 163, 184);
       doc.text("Thank you for your payment.", 105, 270, { align: "center" });
       doc.text(
         "This is a computer-generated receipt and does not require a signature.",
@@ -146,7 +148,6 @@ const CandidateProfile: React.FC = () => {
           amount: parseFloat(paymentForm.amount),
           payment_type: paymentForm.payment_type,
         });
-        // Open in new tab to avoid iframe restrictions
         window.open(response.data.url, "_blank");
         setShowPaymentModal(false);
         return;
@@ -167,8 +168,9 @@ const CandidateProfile: React.FC = () => {
     }
   };
 
-  if (loading) return <div>Loading profile...</div>;
-  if (!candidate) return <div>Candidate not found</div>;
+  if (loading) return <div className="p-8 text-center">Loading profile...</div>;
+  if (!candidate)
+    return <div className="p-8 text-center">Candidate not found</div>;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -209,13 +211,13 @@ const CandidateProfile: React.FC = () => {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <div className="text-center mb-6">
-              <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                <FileText className="w-12 h-12" />
+              <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-3xl font-bold shadow-lg">
+                {candidate.name.charAt(0)}
               </div>
               <h2 className="text-xl font-bold text-slate-900">
                 {candidate.name}
               </h2>
-              <p className="text-slate-500 text-sm">
+              <p className="text-slate-500 text-sm font-mono">
                 {candidate.passport_number}
               </p>
             </div>
@@ -239,25 +241,34 @@ const CandidateProfile: React.FC = () => {
                   {candidate.status}
                 </span>
               </div>
+              {candidate.agent_name && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-500">Agent</span>
+                  <span className="text-slate-900 font-medium">
+                    {candidate.agent_name}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="mt-8 space-y-3">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Documents
+                Main Documents
               </h3>
               {candidate.passport_copy_url && (
                 <a
                   href={candidate.passport_copy_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors group"
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 transition-colors group"
                 >
                   <div className="flex items-center space-x-3">
-                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                    <FileText className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
                     <span className="text-sm text-slate-700">
                       Passport Copy
                     </span>
                   </div>
+                  <Download className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
                 </a>
               )}
               {candidate.cv_url && (
@@ -265,18 +276,19 @@ const CandidateProfile: React.FC = () => {
                   href={candidate.cv_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors group"
+                  className="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-blue-50 transition-colors group"
                 >
                   <div className="flex items-center space-x-3">
-                    <Download className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" />
+                    <FileText className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
                     <span className="text-sm text-slate-700">CV / Resume</span>
                   </div>
+                  <Download className="w-4 h-4 text-slate-400 group-hover:text-blue-600" />
                 </a>
               )}
             </div>
           </div>
 
-          <div className="bg-slate-900 rounded-2xl p-6 text-white">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl">
             <h3 className="text-slate-400 text-sm font-medium mb-4">
               Financial Overview
             </h3>
@@ -303,17 +315,95 @@ const CandidateProfile: React.FC = () => {
                   </p>
                 </div>
               </div>
+              <div className="mt-4 pt-4 border-t border-slate-700">
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div
+                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-2 rounded-full transition-all"
+                    style={{
+                      width: `${((candidate.total_paid || 0) / (candidate.package_amount || 1)) * 100}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-2 text-center">
+                  {Math.round(
+                    ((candidate.total_paid || 0) /
+                      (candidate.package_amount || 1)) *
+                      100,
+                  )}
+                  % Complete
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Ledger / Payment History */}
+        {/* Ledger & Documents */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Additional Documents */}
+          {candidate.additional_documents &&
+            candidate.additional_documents.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                  Additional Documents
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {candidate.additional_documents.map((doc: any) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 transition-all group"
+                    >
+                      <div className="flex items-center space-x-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-gray-900 truncate">
+                            {doc.document_name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {(doc.file_size / 1024).toFixed(2)} KB •{" "}
+                            {new Date(doc.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                        <a
+                          href={doc.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-all"
+                          title="Download"
+                        >
+                          <Download className="w-5 h-5" />
+                        </a>
+                        {["super_admin", "admin", "agent"].includes(
+                          user?.role || "",
+                        ) && (
+                          <button
+                            onClick={() => handleDeleteDocument(doc.id)}
+                            className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          {/* Payment History */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-gray-50 to-blue-50">
               <h2 className="text-lg font-bold text-slate-900">
                 Candidate Ledger
               </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Complete payment history
+              </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -330,24 +420,24 @@ const CandidateProfile: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {payments.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={6}
-                        className="px-6 py-8 text-center text-slate-500"
-                      >
-                        No payments recorded yet.
+                      <td colSpan={6} className="px-6 py-12 text-center">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-slate-500">
+                          No payments recorded yet.
+                        </p>
                       </td>
                     </tr>
                   ) : (
                     payments.map((p) => (
                       <tr
                         key={p.id}
-                        className="hover:bg-slate-50 transition-colors"
+                        className="hover:bg-blue-50 transition-colors"
                       >
                         <td className="px-6 py-4 text-sm text-slate-600">
                           {format(new Date(p.created_at), "MMM dd, yyyy")}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-medium capitalize">
+                          <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium capitalize">
                             {p.payment_type}
                           </span>
                         </td>
@@ -387,7 +477,7 @@ const CandidateProfile: React.FC = () => {
       {showPaymentModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-blue-50">
               <h3 className="text-lg font-bold text-slate-900">
                 Record New Payment
               </h3>
@@ -486,11 +576,7 @@ const CandidateProfile: React.FC = () => {
               </div>
               <button
                 type="submit"
-                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg mt-4 ${
-                  paymentForm.payment_method === "sslcommerz"
-                    ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100"
-                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"
-                }`}
+                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg mt-4 ${paymentForm.payment_method === "sslcommerz" ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"}`}
               >
                 {paymentForm.payment_method === "sslcommerz"
                   ? "Pay with SSLCommerz"

@@ -38,7 +38,14 @@ router.post('/login', async (req, res) => {
 
 // Register (Admin only can create users)
 router.post('/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const {   
+    name, 
+    email, 
+    password, 
+    role,
+    phone,
+    address,
+    commission_rate} = req.body;
 
   if (!password || password.length < 6) {
     return res.status(400).json({ message: 'Password must be at least 6 characters long' });
@@ -52,7 +59,7 @@ router.post('/register', async (req, res) => {
     );
 
     if (role === 'agent') {
-      await query('INSERT INTO agents (user_id) VALUES (?)', [result.insertId]);
+      await query('INSERT INTO agents (user_id, phone, address, commission_rate) VALUES (?, ?, ?, ?)', [result.insertId, phone || null,  address || null, Number(commission_rate) || 0]);
     }
 
     res.status(201).json({ message: 'User created successfully', id: result.insertId });

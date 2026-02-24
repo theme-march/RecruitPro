@@ -1,3 +1,4 @@
+
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
@@ -161,6 +162,24 @@ export const initDb = async () => {
         INDEX idx_status (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    // Candidate Documents table (for additional documents)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS candidate_documents (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        candidate_id INT NOT NULL,
+        document_name VARCHAR(255) NOT NULL,
+        document_url TEXT NOT NULL,
+        file_size INT,
+        mime_type VARCHAR(100),
+        uploaded_by INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (candidate_id) REFERENCES candidates(id) ON DELETE CASCADE,
+        FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_candidate_id (candidate_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+    console.log('✅ Candidate Documents table created/verified');
 
     // Check if super admin exists
     const [adminRows] = await connection.query(

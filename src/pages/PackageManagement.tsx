@@ -46,8 +46,6 @@ const PackageManagement: React.FC = () => {
       const params: any = { page, limit };
       if (search) params.search = search;
       const response = await api.get("/packages", { params });
-      console.log("[PackageManagement] API Response:", response);
-      console.log("[PackageManagement] Response data:", response.data);
       if (!Array.isArray(response.data?.data)) {
         console.warn(
           "[PackageManagement] unexpected response format",
@@ -154,8 +152,6 @@ const PackageManagement: React.FC = () => {
       <div className="text-center text-slate-500 py-8">Loading packages...</div>
     );
   }
-
-  console.log("[PackageManagement] Rendering with packages:", packages);
 
   return (
     <div className="space-y-6">

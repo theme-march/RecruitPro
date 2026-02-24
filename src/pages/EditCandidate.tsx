@@ -35,9 +35,11 @@ const EditCandidate: React.FC = () => {
   const [files, setFiles] = useState<{
     passport_copy: File | null;
     cv: File | null;
+    others: File[];
   }>({
     passport_copy: null,
     cv: null,
+    others: [],
   });
 
   useEffect(() => {
@@ -69,11 +71,16 @@ const EditCandidate: React.FC = () => {
     const fetchPackages = async () => {
       try {
         const res = await api.get("/packages");
-        if (Array.isArray(res.data)) {
-          setPackages(res.data);
-        }
+        const resp = res.data;
+        const list = Array.isArray(resp)
+          ? resp
+          : Array.isArray(resp?.data)
+            ? resp.data
+            : [];
+        setPackages(list);
       } catch (err) {
         console.error("Failed to fetch packages", err);
+        setPackages([]);
       }
     };
 
@@ -92,7 +99,12 @@ const EditCandidate: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles({ ...files, [e.target.name]: e.target.files[0] });
+      if (e.target.name === "others") {
+        // allow multiple additional documents
+        setFiles({ ...files, others: Array.from(e.target.files) });
+      } else {
+        setFiles({ ...files, [e.target.name]: e.target.files[0] });
+      }
     }
   };
 
@@ -106,6 +118,12 @@ const EditCandidate: React.FC = () => {
     );
     if (files.passport_copy) data.append("passport_copy", files.passport_copy);
     if (files.cv) data.append("cv", files.cv);
+
+    if (files.others && files.others.length > 0) {
+      files.others.forEach((file) => {
+        data.append("others", file); // NOT others[]
+      });
+    }
 
     try {
       await api.put(`/candidates/${id}`, data, {
@@ -326,6 +344,32 @@ const EditCandidate: React.FC = () => {
                   <Upload className="w-5 h-5 text-slate-400" />
                   <span className="text-slate-600">
                     {files.cv ? files.cv.name : "Replace CV"}
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium text-slate-700">
+                Additional Documents
+              </label>
+              <div className="relative">
+                <input
+                  type="file"
+                  name="others"
+                  multiple
+                  className="hidden"
+                  id="others"
+                  onChange={handleFileChange}
+                />
+                <label
+                  htmlFor="others"
+                  className="flex items-center justify-center space-x-2 w-full px-4 py-4 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all"
+                >
+                  <Upload className="w-5 h-5 text-slate-400" />
+                  <span className="text-slate-600">
+                    {files.others.length
+                      ? `${files.others.length} file(s) selected`
+                      : "Upload Additional Documents"}
                   </span>
                 </label>
               </div>
