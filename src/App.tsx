@@ -13,6 +13,9 @@ import AgentProfile from './pages/AgentProfile';
 import EditAgent from './pages/EditAgent';
 import UserManagement from './pages/UserManagement';
 import PackageManagement from './pages/PackageManagement';
+import EmployerList from './pages/EmployerList';
+import AddEmployer from './pages/AddEmployer';
+import EmployerProfile from './pages/EmployerProfile';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentFail from './pages/PaymentFail';
 import PaymentCancel from './pages/PaymentCancel';
@@ -37,6 +40,9 @@ export default function App() {
             <Route path="/agents" element={<AgentList />} />
             <Route path="/agents/:id" element={<AgentProfile />} />
             <Route path="/agents/:id/edit" element={<EditAgent />} />
+            <Route path="/employers" element={<EmployerList />} />
+            <Route path="/employers/new" element={<AddEmployer />} />
+            <Route path="/employers/:id" element={<EmployerProfile />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/packages" element={<PackageManagement />} />
           </Route>

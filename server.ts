@@ -11,6 +11,7 @@ import paymentRoutes from "./src/routes/payments.js";
 import dashboardRoutes from "./src/routes/dashboard.js";
 import sslRoutes from "./src/routes/sslcommerz.js";
 import packageRoutes from "./src/routes/packages.js";
+import employerRoutes from "./src/routes/employers.js";
 
 // Initialize Database
 initDb();
@@ -45,6 +46,7 @@ async function startServer() {
   app.use("/api/dashboard", dashboardRoutes);
   app.use("/api/packages", packageRoutes);
   app.use("/api/sslcommerz", sslRoutes);
+  app.use("/api/employers", employerRoutes);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {

@@ -10,8 +10,8 @@ import {
   Menu, 
   X,
   Bell,
-  Search,
-  Settings
+  Settings,
+  Building2
 } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,7 +45,10 @@ const Layout: React.FC = () => {
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Candidates', href: '/candidates', icon: Users },
     ...(user?.role === 'admin' || user?.role === 'super_admin' 
-      ? [{ name: 'Agents', href: '/agents', icon: UserPlus }] 
+      ? [
+          { name: 'Agents', href: '/agents', icon: UserPlus },
+          { name: 'Employers', href: '/employers', icon: Building2 }
+        ] 
       : []),
     ...(user?.role === 'super_admin'
       ? [
