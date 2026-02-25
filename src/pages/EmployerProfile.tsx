@@ -33,9 +33,10 @@ const EmployerProfile: React.FC = () => {
   const [candidates, setCandidates] = useState<any[]>([]);
   const [connectAgentForm, setConnectAgentForm] = useState({ agentId: "" });
   const [connectCandidateForm, setConnectCandidateForm] = useState({
+    agentId: "",
     candidateId: "",
     position: "",
-    salary: "",
+    package_amount: "",
     joining_date: "",
   });
   const [uploadForm, setUploadForm] = useState({
@@ -90,9 +91,10 @@ const EmployerProfile: React.FC = () => {
       });
       setShowConnectCandidate(false);
       setConnectCandidateForm({
+        agentId: "",
         candidateId: "",
         position: "",
-        salary: "",
+        package_amount: "",
         joining_date: "",
       });
       fetchData();
@@ -163,6 +165,19 @@ const EmployerProfile: React.FC = () => {
     return <div className="p-8 text-center">Employer not found</div>;
 
   const isAdmin = ["super_admin", "admin"].includes(user?.role || "");
+  const connectedAgentIds = new Set(
+    (employer.connected_agents || []).map((a: any) => Number(a.id)),
+  );
+  const connectedAgents = employer.connected_agents || [];
+  const eligibleCandidates = candidates.filter((candidate: any) =>
+    connectedAgentIds.has(Number(candidate.agent_id)),
+  );
+  const selectedAgentCandidates = connectCandidateForm.agentId
+    ? eligibleCandidates.filter(
+        (candidate: any) =>
+          Number(candidate.agent_id) === Number(connectCandidateForm.agentId),
+      )
+    : [];
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -289,7 +304,10 @@ const EmployerProfile: React.FC = () => {
                   key={agent.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
                 >
-                  <div className="flex items-center space-x-3">
+                  <Link
+                    to={`/agents/${agent.id}`}
+                    className="flex items-center space-x-3 flex-1 hover:opacity-80 transition-opacity"
+                  >
                     <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
                       {agent.name.charAt(0)}
                     </div>
@@ -299,7 +317,7 @@ const EmployerProfile: React.FC = () => {
                       </p>
                       <p className="text-xs text-gray-500">{agent.email}</p>
                     </div>
-                  </div>
+                  </Link>
                   {isAdmin && (
                     <button
                       onClick={() => handleDisconnectAgent(agent.id)}
@@ -340,7 +358,10 @@ const EmployerProfile: React.FC = () => {
                   key={candidate.id}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-xl"
                 >
-                  <div className="flex items-center space-x-3">
+                  <Link
+                    to={`/candidates/${candidate.id}`}
+                    className="flex items-center space-x-3 flex-1 hover:opacity-80 transition-opacity"
+                  >
                     <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold">
                       {candidate.name.charAt(0)}
                     </div>
@@ -349,10 +370,11 @@ const EmployerProfile: React.FC = () => {
                         {candidate.name}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {candidate.position || "N/A"}
+                        {candidate.position || "N/A"} • Package: ৳
+                        {Number(candidate.package_amount || candidate.salary || 0).toLocaleString()}
                       </p>
                     </div>
-                  </div>
+                  </Link>
                   {isAdmin && (
                     <button
                       onClick={() => handleDisconnectCandidate(candidate.id)}
@@ -485,12 +507,40 @@ const EmployerProfile: React.FC = () => {
             <form onSubmit={handleConnectCandidate} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Select Agent
+                </label>
+                <select
+                  required
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500"
+                  value={connectCandidateForm.agentId}
+                  onChange={(e) =>
+                    setConnectCandidateForm({
+                      ...connectCandidateForm,
+                      agentId: e.target.value,
+                      candidateId: "",
+                    })
+                  }
+                >
+                  <option value="">-- Select Agent --</option>
+                  {connectedAgents.map((agent: any) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name} ({agent.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Select Candidate
                 </label>
                 <select
                   required
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500"
                   value={connectCandidateForm.candidateId}
+                  disabled={
+                    !connectCandidateForm.agentId ||
+                    selectedAgentCandidates.length === 0
+                  }
                   onChange={(e) =>
                     setConnectCandidateForm({
                       ...connectCandidateForm,
@@ -498,66 +548,32 @@ const EmployerProfile: React.FC = () => {
                     })
                   }
                 >
-                  <option value="">-- Select Candidate --</option>
-                  {candidates.map((candidate) => (
+                  <option value="">
+                    {!connectCandidateForm.agentId
+                      ? "-- Select Agent First --"
+                      : selectedAgentCandidates.length === 0
+                        ? "-- No candidate available --"
+                      : "-- Select Candidate --"}
+                  </option>
+                  {selectedAgentCandidates.map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
                       {candidate.name} ({candidate.passport_number})
                     </option>
                   ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Position
-                </label>
-                <input
-                  type="text"
-                  className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500"
-                  value={connectCandidateForm.position}
-                  onChange={(e) =>
-                    setConnectCandidateForm({
-                      ...connectCandidateForm,
-                      position: e.target.value,
-                    })
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Salary
-                  </label>
-                  <input
-                    type="number"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500"
-                    value={connectCandidateForm.salary}
-                    onChange={(e) =>
-                      setConnectCandidateForm({
-                        ...connectCandidateForm,
-                        salary: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Joining Date
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full px-4 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-green-500"
-                    value={connectCandidateForm.joining_date}
-                    onChange={(e) =>
-                      setConnectCandidateForm({
-                        ...connectCandidateForm,
-                        joining_date: e.target.value,
-                      })
-                    }
-                  />
-                </div>
+                {connectCandidateForm.agentId &&
+                  selectedAgentCandidates.length === 0 && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    No candidate found under this agent.
+                  </p>
+                )}
               </div>
               <button
                 type="submit"
+                disabled={
+                  !connectCandidateForm.agentId ||
+                  selectedAgentCandidates.length === 0
+                }
                 className="w-full bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition-all"
               >
                 Connect Candidate

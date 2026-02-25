@@ -36,18 +36,26 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedAgentId(currentAgentId);
       fetchAgents();
     }
-  }, [isOpen]);
+  }, [isOpen, currentAgentId]);
 
   const fetchAgents = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/agents", { params: { limit: 100 } });
-      setAgents(response.data.data || []);
+      const response = await api.get("/agents");
+      const resp = response.data;
+      const list = Array.isArray(resp)
+        ? resp
+        : Array.isArray(resp?.data)
+          ? resp.data
+          : [];
+      setAgents(list);
       setError("");
     } catch (err) {
       console.error(err);
+      setAgents([]);
       setError("Failed to load agents");
     } finally {
       setLoading(false);
@@ -125,7 +133,7 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
                 onChange={(e) => setSelectedAgentId(parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value={currentAgentId} disabled>
+                <option value={currentAgentId}>
                   -- Select Agent --
                 </option>
                 {agents

@@ -16,6 +16,7 @@ import PackageManagement from './pages/PackageManagement';
 import EmployerList from './pages/EmployerList';
 import AddEmployer from './pages/AddEmployer';
 import EmployerProfile from './pages/EmployerProfile';
+import EditEmployer from './pages/EditEmployer';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentFail from './pages/PaymentFail';
 import PaymentCancel from './pages/PaymentCancel';
@@ -43,6 +44,7 @@ export default function App() {
             <Route path="/employers" element={<EmployerList />} />
             <Route path="/employers/new" element={<AddEmployer />} />
             <Route path="/employers/:id" element={<EmployerProfile />} />
+            <Route path="/employers/:id/edit" element={<EditEmployer />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/packages" element={<PackageManagement />} />
           </Route>

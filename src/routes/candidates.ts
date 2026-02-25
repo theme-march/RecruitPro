@@ -56,7 +56,7 @@ router.get('/', authenticateToken, async (req: any, res) => {
       baseQuery = `
         SELECT c.*, u.name as agent_name
         FROM candidates c
-        JOIN users u ON c.agent_id = u.id
+        LEFT JOIN users u ON c.agent_id = u.id
         WHERE 1=1
       `;
     }
@@ -78,7 +78,6 @@ router.get('/', authenticateToken, async (req: any, res) => {
       countQuery = `
         SELECT COUNT(*) as cnt
         FROM candidates c
-        JOIN users u ON c.agent_id = u.id
         WHERE 1=1
       `;
       if (search) {
@@ -127,7 +126,20 @@ router.get('/:id', authenticateToken, async (req: any, res) => {
       [req.params.id]
     );
 
-    res.json({ ...candidate, additional_documents: documents });
+    const connectedEmployers = await query<any[]>(
+      `SELECT e.id, e.company_name, e.country, e.industry, ec.position, ec.salary, ec.status, ec.joining_date, ec.created_at as connection_date
+       FROM employer_candidates ec
+       JOIN employers e ON ec.employer_id = e.id
+       WHERE ec.candidate_id = ?
+       ORDER BY ec.created_at DESC`,
+      [req.params.id]
+    );
+
+    res.json({
+      ...candidate,
+      additional_documents: documents,
+      connected_employers: connectedEmployers,
+    });
   } catch (error) {
     console.error('Get Candidate Error:', error);
     res.status(500).json({ message: 'Failed to fetch candidate' });
@@ -145,10 +157,16 @@ router.post(
     { name: 'others', maxCount: 10 }
   ]),
   async (req: any, res) => {
-    const { name, passport_number, phone, email, date_of_birth, package_amount } = req.body;
-    const agent_id = req.user.role === 'agent' ? req.user.id : req.body.agent_id;
+    const { name, passport_number, phone, email, date_of_birth, package_amount, employer_id } = req.body;
+    const agent_id =
+      req.user.role === 'agent'
+        ? req.user.id
+        : req.body.agent_id
+          ? parseInt(req.body.agent_id, 10)
+          : null;
 
     const files = req.files as any;
+    const safePackageAmount = Number(package_amount) || 0;
     const passport_copy_url = files?.passport_copy ? `/uploads/${files.passport_copy[0].filename}` : null;
     const cv_url = files?.cv ? `/uploads/${files.cv[0].filename}` : null;
 
@@ -163,14 +181,27 @@ router.post(
           phone,
           email,
           date_of_birth,
-          package_amount,
-          package_amount,
+          safePackageAmount,
+          safePackageAmount,
           passport_copy_url,
           cv_url
         ]
       );
 
       const candidateId = result.insertId;
+
+      // If employer selected in Add Candidate form, create candidate-employer link
+      if (employer_id) {
+        const employerIdNum = parseInt(employer_id, 10);
+        if (!isNaN(employerIdNum) && employerIdNum > 0) {
+          await query(
+            `INSERT INTO employer_candidates (employer_id, candidate_id, position, salary, joining_date)
+             VALUES (?, ?, NULL, ?, NULL)
+             ON DUPLICATE KEY UPDATE salary = VALUES(salary)`,
+            [employerIdNum, candidateId, safePackageAmount]
+          );
+        }
+      }
 
       // Save additional documents
       if (files?.others && files.others.length > 0) {
@@ -319,6 +350,50 @@ router.put(
     }
   }
 );
+// Delete additional document
+router.post(
+  '/:id/documents',
+  authenticateToken,
+  authorizeRoles('super_admin', 'admin', 'agent'),
+  upload.single('document'),
+  async (req: any, res) => {
+    try {
+      const candidateId = req.params.id;
+
+      const candidates: Candidate[] = await query<Candidate[]>(
+        'SELECT * FROM candidates WHERE id = ?',
+        [candidateId]
+      );
+      const candidate = candidates[0];
+      if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+
+      if (req.user.role === 'agent' && candidate.agent_id !== req.user.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
+      if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+      await query(
+        `INSERT INTO candidate_documents (candidate_id, document_name, document_url, file_size, mime_type, uploaded_by)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          candidateId,
+          req.file.originalname,
+          `/uploads/${req.file.filename}`,
+          req.file.size,
+          req.file.mimetype,
+          req.user.id
+        ]
+      );
+
+      res.json({ message: 'Document uploaded successfully' });
+    } catch (error) {
+      console.error('Upload Candidate Document Error:', error);
+      res.status(500).json({ message: 'Failed to upload document' });
+    }
+  }
+);
+
 // Delete additional document
 router.delete(
   '/:candidateId/documents/:documentId',

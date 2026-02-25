@@ -57,6 +57,63 @@ router.get('/', authenticateToken, async (req: any, res) => {
   }
 });
 
+// Get employers connected to an agent
+router.get('/agent/:agentId', authenticateToken, async (req: any, res) => {
+  try {
+    const agentId = parseInt(req.params.agentId, 10);
+    if (Number.isNaN(agentId)) return res.status(400).json({ message: 'Invalid agent id' });
+
+    if (req.user.role === 'agent' && req.user.id !== agentId) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const employers = await query(
+      `SELECT e.id, e.company_name, e.country, e.industry, ea.status, ea.created_at as connection_date
+       FROM employer_agents ea
+       JOIN employers e ON ea.employer_id = e.id
+       WHERE ea.agent_id = ?
+       ORDER BY ea.created_at DESC`,
+      [agentId]
+    );
+
+    res.json({ data: employers });
+  } catch (error) {
+    console.error('Get Agent Connected Employers Error:', error);
+    res.status(500).json({ message: 'Failed to fetch connected employers' });
+  }
+});
+
+// Get employers connected to a candidate
+router.get('/candidate/:candidateId', authenticateToken, async (req: any, res) => {
+  try {
+    const candidateId = parseInt(req.params.candidateId, 10);
+    if (Number.isNaN(candidateId)) return res.status(400).json({ message: 'Invalid candidate id' });
+
+    if (req.user.role === 'agent') {
+      const candidates: any = await query('SELECT id, agent_id FROM candidates WHERE id = ?', [candidateId]);
+      const candidate = candidates[0];
+      if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+      if (candidate.agent_id !== req.user.id) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
+
+    const employers = await query(
+      `SELECT e.id, e.company_name, e.country, e.industry, ec.position, ec.salary, ec.status, ec.joining_date, ec.created_at as connection_date
+       FROM employer_candidates ec
+       JOIN employers e ON ec.employer_id = e.id
+       WHERE ec.candidate_id = ?
+       ORDER BY ec.created_at DESC`,
+      [candidateId]
+    );
+
+    res.json({ data: employers });
+  } catch (error) {
+    console.error('Get Candidate Connected Employers Error:', error);
+    res.status(500).json({ message: 'Failed to fetch connected employers' });
+  }
+});
+
 // Get single employer
 router.get('/:id', authenticateToken, async (req: any, res) => {
   try {
@@ -66,7 +123,7 @@ router.get('/:id', authenticateToken, async (req: any, res) => {
     if (!employer) return res.status(404).json({ message: 'Employer not found' });
 
     const agents = await query(`SELECT u.id, u.name, u.email, ea.status, ea.created_at as connection_date FROM employer_agents ea JOIN users u ON ea.agent_id = u.id WHERE ea.employer_id = ?`, [employerId]);
-    const candidates = await query(`SELECT c.id, c.name, c.passport_number, c.phone, ec.position, ec.salary, ec.status, ec.joining_date FROM employer_candidates ec JOIN candidates c ON ec.candidate_id = c.id WHERE ec.employer_id = ?`, [employerId]);
+    const candidates = await query(`SELECT c.id, c.name, c.passport_number, c.phone, c.package_amount, ec.position, ec.salary, ec.status, ec.joining_date FROM employer_candidates ec JOIN candidates c ON ec.candidate_id = c.id WHERE ec.employer_id = ?`, [employerId]);
     const documents = await query(`SELECT * FROM employer_documents WHERE employer_id = ? ORDER BY created_at DESC`, [employerId]);
 
     res.json({ ...employer, connected_agents: agents, connected_candidates: candidates, documents: documents });
@@ -126,8 +183,30 @@ router.post('/:id/connect-agent', authenticateToken, authorizeRoles('super_admin
 // Connect candidate to employer
 router.post('/:id/connect-candidate', authenticateToken, authorizeRoles('super_admin', 'admin'), async (req: any, res) => {
   try {
-    const { employerId, candidateId, position, salary, joining_date } = req.body;
-    await query(`INSERT INTO employer_candidates (employer_id, candidate_id, position, salary, joining_date) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE position = ?, salary = ?, joining_date = ?`, [employerId, candidateId, position, salary, joining_date, position, salary, joining_date]);
+    const { employerId, candidateId, position, package_amount, joining_date } = req.body;
+    const packageAmount = parseFloat(package_amount || "0");
+
+    const candidates: any = await query('SELECT id, total_paid, package_amount FROM candidates WHERE id = ?', [candidateId]);
+    const candidate = candidates[0];
+    if (!candidate) return res.status(404).json({ message: 'Candidate not found' });
+
+    const totalPaid = parseFloat(candidate.total_paid || 0);
+    const finalPackageAmount = Number.isFinite(packageAmount) && packageAmount > 0
+      ? packageAmount
+      : parseFloat(candidate.package_amount || 0);
+    const dueAmount = Math.max(0, finalPackageAmount - totalPaid);
+
+    await query(
+      'UPDATE candidates SET package_amount = ?, due_amount = ? WHERE id = ?',
+      [finalPackageAmount, dueAmount, candidateId]
+    );
+
+    await query(
+      `INSERT INTO employer_candidates (employer_id, candidate_id, position, salary, joining_date)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE position = ?, salary = ?, joining_date = ?`,
+      [employerId, candidateId, position, finalPackageAmount, joining_date, position, finalPackageAmount, joining_date]
+    );
     res.json({ message: 'Candidate connected successfully' });
   } catch (error) {
     console.error('Connect Candidate Error:', error);

@@ -1,51 +1,162 @@
-import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import api from '../services/api';
-import { ArrowLeft, User, Phone, MapPin, Mail, Users, DollarSign, Clock, FileText, Edit2 } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import api from "../services/api";
+import { useAuth } from "../context/AuthContext";
+import {
+  ArrowLeft,
+  User,
+  Phone,
+  MapPin,
+  Mail,
+  FileText,
+  Edit2,
+  Building2,
+  Upload,
+  Download,
+  Trash2,
+  Plus,
+} from "lucide-react";
 
 const AgentProfile: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState<any>(null);
+  const [connectedEmployers, setConnectedEmployers] = useState<any[]>([]);
+  const [agentDocuments, setAgentDocuments] = useState<any[]>([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [assignCandidates, setAssignCandidates] = useState<any[]>([]);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<number>(0);
+  const [assignError, setAssignError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchAgentData = async () => {
-      try {
-        const response = await api.get(`/agents/${id}`);
-        setData(response.data);
-      } catch (err: any) {
-        console.error('Failed to fetch agent data', err);
-        if (err.response?.status === 403) {
-          alert('You do not have permission to view this agent');
-          navigate('/agents');
-        }
-      } finally {
-        setLoading(false);
+  const fetchAgentData = async () => {
+    try {
+      const [agentRes, employersRes, docsRes] = await Promise.all([
+        api.get(`/agents/${id}`),
+        api.get(`/employers/agent/${id}`),
+        api.get(`/agents/${id}/documents`),
+      ]);
+      setData(agentRes.data);
+      setConnectedEmployers(employersRes.data?.data || []);
+      setAgentDocuments(Array.isArray(docsRes.data) ? docsRes.data : []);
+    } catch (err: any) {
+      console.error("Failed to fetch agent data", err);
+      if (err.response?.status === 403) {
+        alert("You do not have permission to view this agent");
+        navigate("/agents");
       }
-    };
-    fetchAgentData();
-  }, [id]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  if (loading) return <div className="flex items-center justify-center h-64">Loading agent profile...</div>;
-  if (!data) return <div className="text-center py-12 text-slate-500">Agent not found</div>;
+  useEffect(() => {
+    fetchAgentData();
+  }, [id, navigate]);
+
+  const fetchAgentDocuments = async () => {
+    try {
+      const docsRes = await api.get(`/agents/${id}/documents`);
+      setAgentDocuments(Array.isArray(docsRes.data) ? docsRes.data : []);
+    } catch (err) {
+      console.error("Failed to fetch agent documents", err);
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!documentFile) return alert("Please select a file");
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("document", documentFile);
+      await api.post(`/agents/${id}/documents`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setShowUploadModal(false);
+      setDocumentFile(null);
+      fetchAgentDocuments();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to upload document");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: number) => {
+    if (!confirm("Delete this document?")) return;
+    try {
+      await api.delete(`/agents/${id}/documents/${documentId}`);
+      fetchAgentDocuments();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete document");
+    }
+  };
+
+  const fetchAssignableCandidates = async () => {
+    try {
+      const response = await api.get("/candidates", {
+        params: { page: 1, limit: 1000 },
+      });
+      const list = response.data?.data || [];
+      const filtered = Array.isArray(list)
+        ? list.filter((candidate: any) => !candidate.agent_id)
+        : [];
+      setAssignCandidates(filtered);
+      setAssignError("");
+    } catch (err) {
+      console.error("Failed to fetch candidates for assignment", err);
+      setAssignCandidates([]);
+      setAssignError("Failed to load candidates");
+    }
+  };
+
+  const openAssignModal = async () => {
+    setSelectedCandidateId(0);
+    setAssignError("");
+    setShowAssignModal(true);
+    await fetchAssignableCandidates();
+  };
+
+  const handleAssignCandidate = async () => {
+    if (!selectedCandidateId) {
+      setAssignError("Please select a candidate");
+      return;
+    }
+
+    try {
+      setAssigning(true);
+      await api.put(`/candidates/${selectedCandidateId}/assign-agent`, {
+        candidateId: selectedCandidateId,
+        newAgentId: Number(id),
+      });
+      setShowAssignModal(false);
+      await fetchAgentData();
+    } catch (err: any) {
+      setAssignError(err.response?.data?.message || "Failed to assign candidate");
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  if (loading) return <div className="p-8 text-center">Loading profile...</div>;
+  if (!data) return <div className="p-8 text-center">Agent not found</div>;
 
   const { agent, candidates } = data;
-
-  const stats = {
-    totalCandidates: candidates.length,
-    // total_paid and due_amount come from MySQL as strings (DECIMAL).
-    // Ensure we treat them as numbers before reducing so we don't concatenate.
-    totalCollection: candidates.reduce((sum: number, c: any) => {
-      const paid = parseFloat(c.total_paid as any) || 0;
-      return sum + paid;
-    }, 0),
-    totalDue: candidates.reduce((sum: number, c: any) => {
-      const due = parseFloat(c.due_amount as any) || 0;
-      return sum + due;
-    }, 0),
-  };
+  const totalCollection = candidates.reduce((sum: number, c: any) => {
+    const paid = parseFloat(c.total_paid as any) || 0;
+    return sum + paid;
+  }, 0);
+  const totalDue = candidates.reduce((sum: number, c: any) => {
+    const due = parseFloat(c.due_amount as any) || 0;
+    return sum + due;
+  }, 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -55,88 +166,211 @@ const AgentProfile: React.FC = () => {
           className="flex items-center space-x-2 text-slate-500 hover:text-slate-900 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
-          <span>Back to Agents</span>
+          <span>Back to List</span>
         </button>
-        <Link
-          to={`/agents/${id}/edit`}
-          className="flex items-center space-x-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-200 transition-all"
-        >
-          <Edit2 className="w-4 h-4" />
-          <span>Edit Agent Profile</span>
-        </Link>
+        {["super_admin", "admin"].includes(user?.role || "") && (
+          <Link
+            to={`/agents/${id}/edit`}
+            className="flex items-center space-x-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+          >
+            <Edit2 className="w-4 h-4" />
+            <span>Edit Profile</span>
+          </Link>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Agent Info Card */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
             <div className="text-center mb-6">
-              <div className="w-24 h-24 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
-                <User className="w-12 h-12" />
+              <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4 text-white text-3xl font-bold shadow-lg">
+                {agent.name?.charAt(0) || "A"}
               </div>
               <h2 className="text-xl font-bold text-slate-900">{agent.name}</h2>
-              <p className="text-indigo-600 text-sm font-semibold uppercase tracking-wider">Agent / Dalal</p>
+              <p className="text-slate-500 text-sm">{agent.email}</p>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center space-x-3 text-slate-600">
-                <Mail className="w-4 h-4" />
-                <span className="text-sm">{agent.email}</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Phone</span>
+                <span className="text-slate-900 font-medium">
+                  {agent.phone || "N/A"}
+                </span>
               </div>
-              <div className="flex items-center space-x-3 text-slate-600">
-                <Phone className="w-4 h-4" />
-                <span className="text-sm">{agent.phone || 'N/A'}</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Address</span>
+                <span className="text-slate-900 font-medium text-right max-w-[65%]">
+                  {agent.address || "N/A"}
+                </span>
               </div>
-              <div className="flex items-center space-x-3 text-slate-600">
-                <MapPin className="w-4 h-4" />
-                <span className="text-sm">{agent.address || 'N/A'}</span>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Commission</span>
+                <span className="text-slate-900 font-medium">
+                  {agent.commission_rate}%
+                </span>
               </div>
-              <div className="pt-4 border-t border-slate-50">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-slate-500">Commission Rate</span>
-                  <span className="text-sm font-bold text-slate-900">{agent.commission_rate}%</span>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  Connected Employers
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                  {connectedEmployers.length}
+                </span>
+              </div>
+              {connectedEmployers.length === 0 ? (
+                <p className="text-sm text-slate-500">No employer connected yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {connectedEmployers.map((employer: any) => (
+                    <Link
+                      key={employer.id}
+                      to={`/employers/${employer.id}`}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                    >
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-slate-800 truncate">
+                          {employer.company_name}
+                        </span>
+                      </div>
+                      <span className="text-xs text-slate-500 capitalize">
+                        {employer.status || "active"}
+                      </span>
+                    </Link>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="bg-slate-900 rounded-2xl p-6 text-white space-y-6">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Performance Summary</h3>
+          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl">
+            <h3 className="text-slate-400 text-sm font-medium mb-4">
+              Financial Overview
+            </h3>
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-indigo-500/20 rounded-lg"><Users className="w-4 h-4 text-indigo-400" /></div>
-                  <span className="text-sm text-slate-300">Candidates</span>
-                </div>
-                <span className="text-lg font-bold">{stats.totalCandidates}</span>
+              <div>
+                <p className="text-slate-400 text-xs uppercase">Candidates</p>
+                <p className="text-2xl font-bold">{candidates.length}</p>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg"><DollarSign className="w-4 h-4 text-emerald-400" /></div>
-                  <span className="text-sm text-slate-300">Collection</span>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-slate-400 text-xs uppercase">Collection</p>
+                  <p className="text-lg font-bold text-emerald-400">
+                    BDT {totalCollection.toLocaleString()}
+                  </p>
                 </div>
-                <span className="text-lg font-bold text-emerald-400">৳{stats.totalCollection.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-red-500/20 rounded-lg"><Clock className="w-4 h-4 text-red-400" /></div>
-                  <span className="text-sm text-slate-300">Total Due</span>
+                <div>
+                  <p className="text-slate-400 text-xs uppercase">Due</p>
+                  <p className="text-lg font-bold text-red-400">
+                    BDT {totalDue.toLocaleString()}
+                  </p>
                 </div>
-                <span className="text-lg font-bold text-red-400">৳{stats.totalDue.toLocaleString()}</span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Candidates List under this Agent */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <FileText className="w-6 h-6 text-blue-600" />
+                Additional Documents
+              </h2>
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="p-2 rounded-lg bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
+
+            {agentDocuments.length === 0 ? (
+              <p className="text-sm text-slate-500">No documents uploaded yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {agentDocuments.map((doc: any) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 transition-all group"
+                  >
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {doc.document_name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {(doc.file_size / 1024).toFixed(2)} KB •{" "}
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                      <a
+                        href={doc.document_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-all"
+                        title="Download"
+                      >
+                        <Download className="w-5 h-5" />
+                      </a>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id)}
+                        className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-900">Candidates under {agent.name}</h2>
-              <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-600">
-                {candidates.length} Total
-              </span>
+            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-gray-50 to-blue-50">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Agent Ledger
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-1">
+                    Candidates under {agent.name}
+                  </p>
+                </div>
+                {["super_admin", "admin", "data_entry"].includes(
+                  user?.role || "",
+                ) && (
+                  <div className="flex items-center gap-2">
+                    {["super_admin", "admin"].includes(user?.role || "") && (
+                      <button
+                        type="button"
+                        onClick={openAssignModal}
+                        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+                      >
+                        <User className="w-4 h-4" />
+                        Assign Candidate
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/candidates/new?agent_id=${agent.id}`)}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Candidate
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -152,30 +386,34 @@ const AgentProfile: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {candidates.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                        No candidates registered by this agent yet.
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-slate-500">
+                          No candidates registered yet.
+                        </p>
                       </td>
                     </tr>
                   ) : (
                     candidates.map((candidate: any) => (
-                      <tr key={candidate.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                              <User className="w-4 h-4" />
-                            </div>
-                            <span className="font-medium text-slate-900">{candidate.name}</span>
-                          </div>
+                      <tr key={candidate.id} className="hover:bg-blue-50 transition-colors">
+                        <td className="px-6 py-4 font-medium text-slate-900">
+                          {candidate.name}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-600 font-mono">{candidate.passport_number}</td>
-                        <td className="px-6 py-4 text-emerald-600 font-bold">৳{candidate.total_paid?.toLocaleString()}</td>
-                        <td className="px-6 py-4 text-red-600 font-bold">৳{candidate.due_amount?.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm text-slate-600 font-mono">
+                          {candidate.passport_number}
+                        </td>
+                        <td className="px-6 py-4 text-emerald-600 font-bold">
+                          BDT {Number(candidate.total_paid || 0).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-red-600 font-bold">
+                          BDT {Number(candidate.due_amount || 0).toLocaleString()}
+                        </td>
                         <td className="px-6 py-4">
                           <Link
                             to={`/candidates/${candidate.id}`}
-                            className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors inline-block"
+                            className="text-indigo-600 hover:text-indigo-900 text-sm font-bold"
                           >
-                            <FileText className="w-5 h-5" />
+                            View
                           </Link>
                         </td>
                       </tr>
@@ -187,6 +425,107 @@ const AgentProfile: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">
+                Upload Document
+              </h3>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-slate-500"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handleUploadDocument} className="p-6 space-y-4">
+              <input
+                type="file"
+                required
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+              />
+              <button
+                type="submit"
+                disabled={uploading}
+                className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60"
+              >
+                <Upload className="w-4 h-4" />
+                {uploading ? "Uploading..." : "Upload Document"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">
+                Assign Candidate
+              </h3>
+              <button
+                onClick={() => setShowAssignModal(false)}
+                className="text-slate-500"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-slate-700">
+                  Assign to {agent.name}
+                </label>
+                <select
+                  className="mt-2 w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={selectedCandidateId || ""}
+                  onChange={(e) => setSelectedCandidateId(Number(e.target.value))}
+                >
+                  <option value="">-- Select Candidate --</option>
+                  {assignCandidates.map((candidate: any) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} ({candidate.passport_number})
+                    </option>
+                  ))}
+                </select>
+                {assignCandidates.length === 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    No unassigned candidate available. To change assigned
+                    candidate, use Edit Candidate Profile.
+                  </p>
+                )}
+              </div>
+
+              {assignError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">{assignError}</p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAssignModal(false)}
+                  className="flex-1 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAssignCandidate}
+                  disabled={assigning}
+                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium disabled:opacity-60"
+                >
+                  {assigning ? "Assigning..." : "Assign"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

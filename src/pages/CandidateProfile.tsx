@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
@@ -9,6 +9,7 @@ import {
   Plus,
   Edit2,
   Trash2,
+  Building2,
 } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
@@ -22,6 +23,9 @@ const CandidateProfile: React.FC = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     payment_type: "visa",
@@ -36,11 +40,16 @@ const CandidateProfile: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [cRes, pRes] = await Promise.all([
+      const [cRes, pRes, employersRes] = await Promise.all([
         api.get(`/candidates/${id}`),
         api.get(`/payments/candidate/${id}`),
+        api.get(`/employers/candidate/${id}`),
       ]);
-      setCandidate(cRes.data);
+      setCandidate({
+        ...cRes.data,
+        connected_employers:
+          employersRes.data?.data || cRes.data?.connected_employers || [],
+      });
       setPayments(pRes.data);
     } catch (err) {
       console.error(err);
@@ -57,6 +66,27 @@ const CandidateProfile: React.FC = () => {
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to delete document");
+    }
+  };
+
+  const handleUploadDocument = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!documentFile) return alert("Please select a file");
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("document", documentFile);
+      await api.post(`/candidates/${id}/documents`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setShowUploadModal(false);
+      setDocumentFile(null);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to upload document");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -251,6 +281,51 @@ const CandidateProfile: React.FC = () => {
               )}
             </div>
 
+            <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  Connected Employers
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                  {candidate.connected_employers?.length || 0}
+                </span>
+              </div>
+
+              {!candidate.connected_employers ||
+              candidate.connected_employers.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No employer connected yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {candidate.connected_employers.map((employer: any) => (
+                    <Link
+                      key={`${employer.id}-${employer.connection_date}`}
+                      to={`/employers/${employer.id}`}
+                      className="block p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                          <span className="text-sm font-medium text-slate-800 truncate">
+                            {employer.company_name}
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-500 capitalize">
+                          {employer.status || "active"}
+                        </span>
+                      </div>
+                      {employer.position && (
+                        <p className="text-xs text-slate-500 mt-1">
+                          Position: {employer.position}
+                        </p>
+                      )}
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="mt-8 space-y-3">
               <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                 Main Documents
@@ -339,61 +414,74 @@ const CandidateProfile: React.FC = () => {
 
         {/* Ledger & Documents */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Additional Documents */}
-          {candidate.additional_documents &&
-            candidate.additional_documents.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-blue-600" />
-                  Additional Documents
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {candidate.additional_documents.map((doc: any) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 transition-all group"
-                    >
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <FileText className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-gray-900 truncate">
-                            {doc.document_name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(doc.file_size / 1024).toFixed(2)} KB •{" "}
-                            {new Date(doc.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
+                    {/* Additional Documents */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                <FileText className="w-6 h-6 text-blue-600" />
+                Additional Documents
+              </h2>
+              {["super_admin", "admin", "agent"].includes(user?.role || "") && (
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  className="p-2 rounded-lg bg-indigo-100 text-indigo-600 hover:bg-indigo-200 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {!candidate.additional_documents ||
+            candidate.additional_documents.length === 0 ? (
+              <p className="text-sm text-slate-500">No documents uploaded yet.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {candidate.additional_documents.map((doc: any) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 transition-all group"
+                  >
+                    <div className="flex items-center space-x-3 flex-1 min-w-0">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-5 h-5 text-blue-600" />
                       </div>
-                      <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
-                        <a
-                          href={doc.document_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-all"
-                          title="Download"
-                        >
-                          <Download className="w-5 h-5" />
-                        </a>
-                        {["super_admin", "admin", "agent"].includes(
-                          user?.role || "",
-                        ) && (
-                          <button
-                            onClick={() => handleDeleteDocument(doc.id)}
-                            className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {doc.document_name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {(doc.file_size / 1024).toFixed(2)} KB •{" "}
+                          {new Date(doc.created_at).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                      <a
+                        href={doc.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-blue-100 rounded-lg text-blue-600 transition-all"
+                        title="Download"
+                      >
+                        <Download className="w-5 h-5" />
+                      </a>
+                      {["super_admin", "admin", "agent"].includes(
+                        user?.role || "",
+                      ) && (
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
+          </div>
 
           {/* Payment History */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -472,6 +560,39 @@ const CandidateProfile: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900">
+                Upload Document
+              </h3>
+              <button
+                onClick={() => setShowUploadModal(false)}
+                className="text-slate-500"
+              >
+                <Plus className="w-5 h-5 rotate-45" />
+              </button>
+            </div>
+            <form onSubmit={handleUploadDocument} className="p-6 space-y-4">
+              <input
+                type="file"
+                required
+                className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-indigo-500"
+                onChange={(e) => setDocumentFile(e.target.files?.[0] || null)}
+              />
+              <button
+                type="submit"
+                disabled={uploading}
+                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60"
+              >
+                {uploading ? "Uploading..." : "Upload Document"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {showPaymentModal && (
@@ -591,3 +712,5 @@ const CandidateProfile: React.FC = () => {
 };
 
 export default CandidateProfile;
+
+

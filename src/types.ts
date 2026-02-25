@@ -27,7 +27,7 @@ export interface Agent {
 
 export interface Candidate {
   id: number;
-  agent_id: number;
+  agent_id: number | null;
   name: string;
   passport_number: string;
   phone?: string;

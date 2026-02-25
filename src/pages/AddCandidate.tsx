@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { ArrowLeft, Save, Upload } from "lucide-react";
@@ -16,11 +16,21 @@ interface Agent {
   email: string;
 }
 
+interface Employer {
+  id: number;
+  company_name: string;
+}
+
 const AddCandidate: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+  const preselectedAgentId =
+    new URLSearchParams(location.search).get("agent_id") || "";
 
   const [loading, setLoading] = useState(false);
+  const [employers, setEmployers] = useState<Employer[]>([]);
+  const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
 
@@ -31,8 +41,12 @@ const AddCandidate: React.FC = () => {
     email: "",
     date_of_birth: "",
     package_amount: "",
+    employer_id: "",
     agent_id: "",
   });
+  const isAgentPreselected =
+    Boolean(preselectedAgentId) &&
+    String(formData.agent_id) === String(preselectedAgentId);
 
   const [files, setFiles] = useState<{
     passport_copy: File | null;
@@ -45,9 +59,10 @@ const AddCandidate: React.FC = () => {
   useEffect(() => {
     fetchPackages();
     if (user && user.role !== "agent") {
+      fetchEmployers();
       fetchAgents();
     }
-  }, [user]);
+  }, [user, preselectedAgentId]);
 
   const fetchPackages = async () => {
     try {
@@ -74,9 +89,45 @@ const AddCandidate: React.FC = () => {
         : Array.isArray(resp?.data)
           ? resp.data
           : [];
+      setAllAgents(list);
       setAgents(list);
+      if (preselectedAgentId) {
+        const matchedAgent = list.find(
+          (agent: Agent) => String(agent.id) === String(preselectedAgentId),
+        );
+        if (matchedAgent) {
+          setFormData((prev) => ({ ...prev, agent_id: String(matchedAgent.id) }));
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch agents", err);
+      setAgents([]);
+    }
+  };
+
+  const fetchEmployers = async () => {
+    try {
+      const response = await api.get("/employers", {
+        params: { page: 1, limit: 1000 },
+      });
+      setEmployers(response.data?.data || []);
+    } catch (err) {
+      console.error("Failed to fetch employers", err);
+      setEmployers([]);
+    }
+  };
+
+  const fetchEmployerAgents = async (employerId: string) => {
+    if (!employerId) {
+      setAgents(allAgents);
+      return;
+    }
+    try {
+      const response = await api.get(`/employers/${employerId}`);
+      const connectedAgents = response.data?.connected_agents || [];
+      setAgents(connectedAgents);
+    } catch (err) {
+      console.error("Failed to fetch employer agents", err);
       setAgents([]);
     }
   };
@@ -84,6 +135,18 @@ const AddCandidate: React.FC = () => {
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
+    if (e.target.name === "employer_id") {
+      const employerId = e.target.value;
+      setFormData({
+        ...formData,
+        employer_id: employerId,
+        agent_id: preselectedAgentId || "",
+      });
+      if (!preselectedAgentId) {
+        fetchEmployerAgents(employerId);
+      }
+      return;
+    }
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -95,11 +158,6 @@ const AddCandidate: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (user?.role !== "agent" && !formData.agent_id) {
-      alert("Please select an agent");
-      return;
-    }
 
     setLoading(true);
 
@@ -148,16 +206,41 @@ const AddCandidate: React.FC = () => {
             {user?.role !== "agent" && (
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
+                  Select Employer
+                </label>
+                <select
+                  name="employer_id"
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                  value={formData.employer_id}
+                  onChange={handleChange}
+                >
+                  <option value="">-- Select Employer --</option>
+                  {employers.map((employer) => (
+                    <option key={employer.id} value={employer.id}>
+                      {employer.company_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {user?.role !== "agent" && (
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-medium text-slate-700">
                   Select Agent
                 </label>
                 <select
                   name="agent_id"
-                  required
+                  disabled={isAgentPreselected}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                   value={formData.agent_id}
                   onChange={handleChange}
                 >
-                  <option value="">-- Select Agent --</option>
+                  <option value="">
+                    {isAgentPreselected
+                      ? "-- Assigned from Agent Profile --"
+                      : "-- Select Agent (Optional) --"}
+                  </option>
                   {agents.map((agent) => (
                     <option key={agent.id} value={agent.id}>
                       {agent.name} ({agent.email})
@@ -237,11 +320,10 @@ const AddCandidate: React.FC = () => {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">
-                Total Package Amount (৳)
+                Total Package Amount (৳) (Optional)
               </label>
               <select
                 name="package_amount"
-                required
                 className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 value={formData.package_amount}
                 onChange={handleChange}
