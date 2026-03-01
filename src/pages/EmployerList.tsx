@@ -12,6 +12,7 @@ import {
   Mail,
   Phone,
   TrendingUp,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -33,30 +34,44 @@ const EmployerList: React.FC = () => {
   const [employers, setEmployers] = useState<Employer[]>([]);
   const [filteredEmployers, setFilteredEmployers] = useState<Employer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
   const [filterStatus, setFilterStatus] = useState("all");
+  const [userRole, setUserRole] = useState<string>("");
 
   useEffect(() => {
-    fetchEmployers();
-  }, [page]);
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserRole(user.role || "");
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchEmployers();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [page, search]);
 
   useEffect(() => {
     applyFilters();
   }, [search, filterStatus, employers]);
 
   const fetchEmployers = async () => {
+    const showInitialLoader = !hasLoaded;
     try {
-      setLoading(true);
-      const response = await api.get("/employers", { params: { page, limit } });
+      if (showInitialLoader) setLoading(true);
+      const response = await api.get("/employers", { params: { page, limit, search } });
       setEmployers(response.data.data || []);
       setTotal(response.data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showInitialLoader) {
+        setLoading(false);
+        setHasLoaded(true);
+      }
     }
   };
 
@@ -102,17 +117,6 @@ const EmployerList: React.FC = () => {
   const applyFilters = () => {
     let result = [...employers];
 
-    if (search.trim()) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(
-        (e) =>
-          e.company_name.toLowerCase().includes(searchLower) ||
-          e.country?.toLowerCase().includes(searchLower) ||
-          e.industry?.toLowerCase().includes(searchLower) ||
-          e.contact_email?.toLowerCase().includes(searchLower),
-      );
-    }
-
     if (filterStatus !== "all") {
       result = result.filter((e) => getStatus(e) === filterStatus);
     }
@@ -122,7 +126,18 @@ const EmployerList: React.FC = () => {
 
   const clearSearch = () => {
     setSearch("");
+    setPage(1);
     setFilterStatus("all");
+  };
+
+  const handleDelete = async (employerId: number) => {
+    if (!confirm("Delete this employer?")) return;
+    try {
+      await api.delete(`/employers/${employerId}`);
+      fetchEmployers();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete employer");
+    }
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -166,7 +181,10 @@ const EmployerList: React.FC = () => {
           )}
         </div>
         <button
-          onClick={fetchEmployers}
+          onClick={() => {
+            setPage(1);
+            fetchEmployers();
+          }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
         >
           <Search className="w-5 h-5" />
@@ -264,6 +282,11 @@ const EmployerList: React.FC = () => {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                 Country
               </th>
+              {["super_admin", "admin"].includes(userRole) && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  Actions
+                </th>
+              )}
               <th className="w-8 px-4 py-3"></th>
             </tr>
           </thead>
@@ -343,6 +366,18 @@ const EmployerList: React.FC = () => {
                       <span>{employer.country || "N/A"}</span>
                     </div>
                   </td>
+                  {["super_admin", "admin"].includes(userRole) && (
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(employer.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Delete employer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
                   <td className="px-4 py-4">
                     {employer.website ? (
                       <a
@@ -435,4 +470,3 @@ const EmployerList: React.FC = () => {
 };
 
 export default EmployerList;
-

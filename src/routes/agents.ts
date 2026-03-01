@@ -39,7 +39,7 @@ router.get(
       const search = (req.query.search as string || '').trim();
       const offset = (page - 1) * limit;
 
-      let whereClause = "WHERE u.role = 'agent'";
+      let whereClause = "WHERE u.role = 'agent' AND u.is_deleted = 0";
       const params: any[] = [];
 
       if (search) {
@@ -49,7 +49,7 @@ router.get(
 
       const dataQuery = `
         SELECT u.id, u.name, u.email, a.phone, a.address, a.commission_rate,
-               (SELECT COUNT(*) FROM candidates WHERE agent_id = u.id) as candidate_count
+               (SELECT COUNT(*) FROM candidate_agents ca JOIN candidates c2 ON c2.id = ca.candidate_id WHERE ca.agent_id = u.id AND c2.is_deleted = 0) as candidate_count
         FROM users u
         JOIN agents a ON u.id = a.user_id
         ${whereClause}
@@ -84,14 +84,26 @@ router.get('/:id', authenticateToken, authorizeRoles('super_admin', 'admin', 'ag
       `SELECT u.id, u.name, u.email, a.phone, a.address, a.commission_rate
        FROM users u
        LEFT JOIN agents a ON u.id = a.user_id
-       WHERE u.id = ? AND u.role = 'agent'`,
+       WHERE u.id = ? AND u.role = 'agent' AND u.is_deleted = 0`,
       [agentId]
     );
 
     const agent = agentRows[0];
     if (!agent) return res.status(404).json({ message: 'Agent not found' });
 
-    const candidates = await query<Candidate[]>('SELECT * FROM candidates WHERE agent_id = ?', [agentId]);
+    const candidates = await query<any[]>(
+      `SELECT
+         c.*,
+         COALESCE(GROUP_CONCAT(DISTINCT e.company_name ORDER BY e.company_name SEPARATOR ', '), '') as employer_names
+       FROM candidate_agents ca
+       JOIN candidates c ON ca.candidate_id = c.id AND c.is_deleted = 0
+       LEFT JOIN employer_candidates ec ON ec.candidate_id = c.id
+       LEFT JOIN employers e ON e.id = ec.employer_id
+       WHERE ca.agent_id = ?
+       GROUP BY c.id
+       ORDER BY c.created_at DESC`,
+      [agentId]
+    );
     const connectedEmployers = await query<any[]>(
       `SELECT e.id, e.company_name, e.country, e.industry, ea.status, ea.created_at as connection_date
        FROM employer_agents ea
@@ -156,7 +168,7 @@ router.post('/:id/documents', authenticateToken, authorizeRoles('super_admin', '
 });
 
 // Delete additional document for agent profile
-router.delete('/:id/documents/:documentId', authenticateToken, authorizeRoles('super_admin', 'admin', 'agent'), async (req: any, res) => {
+router.delete('/:id/documents/:documentId', authenticateToken, authorizeRoles('super_admin', 'admin'), async (req: any, res) => {
   try {
     const agentId = parseInt(req.params.id, 10);
     const documentId = parseInt(req.params.documentId, 10);
@@ -196,7 +208,7 @@ router.put('/:id', authenticateToken, authorizeRoles('super_admin', 'admin'), as
       return res.status(400).json({ message: 'Invalid agent ID' });
     }
 
-    const agentRows = await query<User[]>('SELECT * FROM users WHERE id = ? AND role = "agent"',
+      const agentRows = await query<User[]>('SELECT * FROM users WHERE id = ? AND role = "agent" AND is_deleted = 0',
       [agentId]
     );
     const agent = (agentRows as User[])[0];
@@ -205,7 +217,7 @@ router.put('/:id', authenticateToken, authorizeRoles('super_admin', 'admin'), as
     }
 
     await transaction(async (conn) => {
-      await conn.query('UPDATE users SET name = ?, email = ? WHERE id = ? AND role = "agent"', [
+      await conn.query('UPDATE users SET name = ?, email = ? WHERE id = ? AND role = "agent" AND is_deleted = 0', [
         name,
         email,
         agentId
@@ -219,6 +231,30 @@ router.put('/:id', authenticateToken, authorizeRoles('super_admin', 'admin'), as
   } catch (error: any) {
     console.error('Agent PUT Error:', error);
     res.status(500).json({ message: 'Server error: ' + (error.message || 'Unknown error') });
+  }
+});
+
+// Soft delete agent
+router.delete('/:id', authenticateToken, authorizeRoles('super_admin', 'admin'), async (req: any, res) => {
+  try {
+    const agentId = parseInt(req.params.id, 10);
+    if (Number.isNaN(agentId)) {
+      return res.status(400).json({ message: 'Invalid agent id' });
+    }
+
+    const deleted = await query<any>(
+      'UPDATE users SET is_deleted = 1, deleted_at = NOW() WHERE id = ? AND role = "agent" AND is_deleted = 0',
+      [agentId]
+    );
+
+    if (deleted.affectedRows === 0) {
+      return res.status(404).json({ message: 'Agent not found' });
+    }
+
+    res.json({ message: 'Agent deleted successfully' });
+  } catch (error) {
+    console.error('Delete Agent Error:', error);
+    res.status(500).json({ message: 'Failed to delete agent' });
   }
 });
 

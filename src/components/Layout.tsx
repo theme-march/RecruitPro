@@ -5,13 +5,13 @@ import {
   LayoutDashboard, 
   Users, 
   UserPlus, 
-  Layers, 
   LogOut, 
   Menu, 
   X,
   Bell,
   Settings,
-  Building2
+  Building2,
+  BarChart3
 } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,6 +43,7 @@ const Layout: React.FC = () => {
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Candidates', href: '/candidates', icon: Users },
     ...(user?.role === 'admin' || user?.role === 'super_admin' 
       ? [
@@ -52,8 +53,7 @@ const Layout: React.FC = () => {
       : []),
     ...(user?.role === 'super_admin'
       ? [
-          { name: 'Users', href: '/users', icon: Users },
-          { name: 'Packages', href: '/packages', icon: Layers }
+          { name: 'Users', href: '/users', icon: Users }
         ]
       : []),
   ];

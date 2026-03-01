@@ -14,6 +14,7 @@ interface AssignAgentModalProps {
   candidateName: string;
   currentAgentId: number;
   currentAgentName: string;
+  excludedAgentIds?: number[];
   isOpen: boolean;
   onClose: () => void;
   onAssign: () => void;
@@ -24,6 +25,7 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
   candidateName,
   currentAgentId,
   currentAgentName,
+  excludedAgentIds = [],
   isOpen,
   onClose,
   onAssign,
@@ -63,6 +65,10 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
   };
 
   const handleAssign = async () => {
+    if (!selectedAgentId) {
+      setError("Please select an agent");
+      return;
+    }
     if (selectedAgentId === currentAgentId) {
       setError("Please select a different agent");
       return;
@@ -133,11 +139,15 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
                 onChange={(e) => setSelectedAgentId(parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
-                <option value={currentAgentId}>
+                <option value={0}>
                   -- Select Agent --
                 </option>
                 {agents
-                  .filter((a) => a.id !== currentAgentId)
+                  .filter(
+                    (a) =>
+                      a.id !== currentAgentId &&
+                      !excludedAgentIds.includes(a.id),
+                  )
                   .map((agent) => (
                     <option key={agent.id} value={agent.id}>
                       {agent.name} ({agent.candidate_count || 0} candidates)
@@ -164,7 +174,9 @@ const AssignAgentModal: React.FC<AssignAgentModalProps> = ({
           </button>
           <button
             onClick={handleAssign}
-            disabled={loading || selectedAgentId === currentAgentId}
+            disabled={
+              loading || !selectedAgentId || selectedAgentId === currentAgentId
+            }
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "Assigning..." : "Assign"}

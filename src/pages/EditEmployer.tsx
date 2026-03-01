@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Save, Upload } from "lucide-react";
+import { ArrowLeft, Save, Upload, Plus, Trash2 } from "lucide-react";
 import api from "../services/api";
 
 const EditEmployer: React.FC = () => {
@@ -9,6 +9,9 @@ const EditEmployer: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [logo, setLogo] = useState<File | null>(null);
+  const [vacancies, setVacancies] = useState<
+    Array<{ job_title: string; required_count: number }>
+  >([{ job_title: "", required_count: 1 }]);
 
   const [formData, setFormData] = useState({
     company_name: "",
@@ -38,6 +41,17 @@ const EditEmployer: React.FC = () => {
           website: e.website || "",
           description: e.description || "",
         });
+        const existingVacancies = Array.isArray(e.vacancies)
+          ? e.vacancies.map((v: any) => ({
+              job_title: v.job_title || "",
+              required_count: Number(v.required_count) || 1,
+            }))
+          : [];
+        setVacancies(
+          existingVacancies.length
+            ? existingVacancies
+            : [{ job_title: "", required_count: 1 }],
+        );
       } catch (err: any) {
         console.error(err);
         alert(err.response?.data?.message || "Failed to fetch employer");
@@ -65,6 +79,8 @@ const EditEmployer: React.FC = () => {
       Object.entries(formData).forEach(([key, value]) => {
         payload.append(key, value);
       });
+      const validVacancies = vacancies.filter((v) => v.job_title.trim());
+      payload.append("vacancies", JSON.stringify(validVacancies));
       if (logo) payload.append("logo", logo);
 
       await api.put(`/employers/${id}`, payload, {
@@ -77,6 +93,34 @@ const EditEmployer: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateVacancy = (
+    index: number,
+    key: "job_title" | "required_count",
+    value: string | number,
+  ) => {
+    setVacancies((prev) =>
+      prev.map((v, i) =>
+        i === index
+          ? {
+              ...v,
+              [key]:
+                key === "required_count" ? Math.max(1, Number(value) || 1) : value,
+            }
+          : v,
+      ),
+    );
+  };
+
+  const addVacancyRow = () => {
+    setVacancies((prev) => [...prev, { job_title: "", required_count: 1 }]);
+  };
+
+  const removeVacancyRow = (index: number) => {
+    setVacancies((prev) =>
+      prev.length === 1 ? prev : prev.filter((_, i) => i !== index),
+    );
   };
 
   if (fetching) return <div className="p-8 text-center">Loading employer...</div>;
@@ -241,6 +285,64 @@ const EditEmployer: React.FC = () => {
             </label>
           </div>
 
+          <div className="space-y-4 border-t border-slate-100 pt-6">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-slate-700">
+                Vacancies (Job + Required People)
+              </label>
+              <button
+                type="button"
+                onClick={addVacancyRow}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Add Job
+              </button>
+            </div>
+            <div className="space-y-3">
+              {vacancies.map((vacancy, index) => (
+                <div
+                  key={index}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center"
+                >
+                  <div className="md:col-span-8">
+                    <input
+                      type="text"
+                      placeholder="Job title (e.g. Welder)"
+                      value={vacancy.job_title}
+                      onChange={(e) =>
+                        updateVacancy(index, "job_title", e.target.value)
+                      }
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <input
+                      type="number"
+                      min={1}
+                      placeholder="Required"
+                      value={vacancy.required_count}
+                      onChange={(e) =>
+                        updateVacancy(index, "required_count", e.target.value)
+                      }
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <button
+                      type="button"
+                      onClick={() => removeVacancyRow(index)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      title="Remove vacancy"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="flex justify-end">
             <button
               type="submit"
@@ -258,4 +360,3 @@ const EditEmployer: React.FC = () => {
 };
 
 export default EditEmployer;
-

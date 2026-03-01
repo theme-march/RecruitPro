@@ -10,9 +10,10 @@ import {
   Mail,
   MapPin,
   TrendingUp,
+  Trash2,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 interface Agent {
   id: number;
@@ -27,15 +28,18 @@ interface Agent {
 }
 
 const AgentList: React.FC = () => {
+  const location = useLocation();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [userRole, setUserRole] = useState<string>("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -48,8 +52,23 @@ const AgentList: React.FC = () => {
 
   // Fetch agents from API
   useEffect(() => {
-    fetchAgents();
-  }, [page]);
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    setUserRole(user.role || "");
+  }, []);
+
+  useEffect(() => {
+    const shouldOpenAdd = new URLSearchParams(location.search).get("openAdd") === "1";
+    if (shouldOpenAdd) {
+      setShowAddModal(true);
+    }
+  }, [location.search]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchAgents();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [page, search]);
 
   // Apply search and filter locally
   useEffect(() => {
@@ -57,32 +76,25 @@ const AgentList: React.FC = () => {
   }, [search, filterStatus, agents]);
 
   const fetchAgents = async () => {
+    const showInitialLoader = !hasLoaded;
     try {
-      setLoading(true);
-      const params: any = { page, limit };
+      if (showInitialLoader) setLoading(true);
+      const params: any = { page, limit, search };
       const response = await api.get("/agents", { params });
       setAgents(response.data.data || []);
       setTotal(response.data.total || 0);
     } catch (err: any) {
       console.error(err.response?.data || err.message);
     } finally {
-      setLoading(false);
+      if (showInitialLoader) {
+        setLoading(false);
+        setHasLoaded(true);
+      }
     }
   };
 
   const applyFilters = () => {
     let result = [...agents];
-
-    // Search filter
-    if (search.trim()) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(
-        (agent) =>
-          agent.name.toLowerCase().includes(searchLower) ||
-          agent.email.toLowerCase().includes(searchLower) ||
-          agent.phone?.toLowerCase().includes(searchLower),
-      );
-    }
 
     // Status filter
     if (filterStatus !== "all") {
@@ -122,7 +134,18 @@ const AgentList: React.FC = () => {
 
   const clearSearch = () => {
     setSearch("");
+    setPage(1);
     setFilterStatus("all");
+  };
+
+  const handleDelete = async (agentId: number) => {
+    if (!confirm("Delete this agent?")) return;
+    try {
+      await api.delete(`/agents/${agentId}`);
+      fetchAgents();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete agent");
+    }
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -183,7 +206,10 @@ const AgentList: React.FC = () => {
           )}
         </div>
         <button
-          onClick={fetchAgents}
+          onClick={() => {
+            setPage(1);
+            fetchAgents();
+          }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
         >
           <Search className="w-5 h-5" />
@@ -284,6 +310,11 @@ const AgentList: React.FC = () => {
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                 Candidates
               </th>
+              {["super_admin", "admin"].includes(userRole) && (
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  Actions
+                </th>
+              )}
               <th className="w-8 px-4 py-3"></th>
             </tr>
           </thead>
@@ -368,17 +399,19 @@ const AgentList: React.FC = () => {
                       {agent.candidate_count}
                     </div>
                   </td>
-                  <td className="px-4 py-4">
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <svg
-                        className="w-5 h-5"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
+                  {["super_admin", "admin"].includes(userRole) && (
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(agent.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Delete agent"
                       >
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                      </svg>
-                    </button>
-                  </td>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  )}
+                  <td className="px-4 py-4" />
                 </tr>
               );
             })}

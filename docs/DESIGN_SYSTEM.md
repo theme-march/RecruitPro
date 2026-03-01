@@ -3,28 +3,24 @@
 ## 🎯 Color Palette
 
 ### Primary Colors
+
 ```css
---blue-600: #3B82F6
---indigo-600: #6366F1
---gradient-primary: linear-gradient(to right, #3B82F6, #6366F1)
+--blue-600: #3b82f6 --indigo-600: #6366f1
+  --gradient-primary: linear-gradient(to right, #3b82f6, #6366f1);
 ```
 
 ### Status Colors
+
 ```css
---success: #10B981 (Emerald)
---warning: #F59E0B (Amber)
---danger: #EF4444 (Red)
---info: #3B82F6 (Blue)
---pending: #F59E0B (Amber)
+--success: #10b981 (Emerald) --warning: #f59e0b (Amber) --danger: #ef4444 (Red)
+  --info: #3b82f6 (Blue) --pending: #f59e0b (Amber);
 ```
 
 ### Neutral Colors
+
 ```css
---gray-50: #F9FAFB
---gray-100: #F3F4F6
---gray-200: #E5E7EB
---gray-600: #4B5563
---gray-900: #111827
+--gray-50: #f9fafb --gray-100: #f3f4f6 --gray-200: #e5e7eb --gray-600: #4b5563
+  --gray-900: #111827;
 ```
 
 ---
@@ -46,6 +42,7 @@ xl: 2rem (32px)
 ## 🔤 Typography
 
 ### Font Sizes
+
 ```css
 text-xs: 0.75rem (12px)
 text-sm: 0.875rem (14px)
@@ -57,6 +54,7 @@ text-3xl: 1.875rem (30px)
 ```
 
 ### Font Weights
+
 ```css
 font-normal: 400
 font-medium: 500
@@ -69,6 +67,7 @@ font-bold: 700
 ## 🎨 Common Components
 
 ### Button
+
 ```tsx
 // Primary Button
 <button className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-3 rounded-xl font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg">
@@ -82,6 +81,7 @@ font-bold: 700
 ```
 
 ### Input
+
 ```tsx
 <input
   type="text"
@@ -91,6 +91,7 @@ font-bold: 700
 ```
 
 ### Badge
+
 ```tsx
 // Success Badge
 <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">
@@ -109,6 +110,7 @@ font-bold: 700
 ```
 
 ### Card
+
 ```tsx
 <div className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-all">
   <h3 className="text-xl font-bold mb-4">Card Title</h3>
@@ -117,6 +119,7 @@ font-bold: 700
 ```
 
 ### Avatar
+
 ```tsx
 <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg">
   A
@@ -124,11 +127,12 @@ font-bold: 700
 ```
 
 ### Progress Bar
+
 ```tsx
 <div className="w-full bg-gray-200 rounded-full h-2">
   <div
     className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-2 rounded-full transition-all"
-    style={{ width: '75%' }}
+    style={{ width: "75%" }}
   />
 </div>
 ```
@@ -138,6 +142,7 @@ font-bold: 700
 ## 🎭 Animations
 
 ### Framer Motion - Fade In
+
 ```tsx
 <motion.div
   initial={{ opacity: 0, y: 20 }}
@@ -149,11 +154,9 @@ font-bold: 700
 ```
 
 ### Framer Motion - Stagger Children
+
 ```tsx
-<motion.div
-  initial={{ opacity: 0 }}
-  animate={{ opacity: 1 }}
->
+<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
   {items.map((item, i) => (
     <motion.div
       key={item.id}
@@ -168,6 +171,7 @@ font-bold: 700
 ```
 
 ### CSS Transitions
+
 ```css
 .transition-all {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -191,6 +195,7 @@ xl: 1280px  /* Large desktop */
 ```
 
 ### Usage
+
 ```tsx
 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
   {/* Responsive grid */}
@@ -202,26 +207,27 @@ xl: 1280px  /* Large desktop */
 ## 🎯 Icons (Lucide React)
 
 ### Common Icons
+
 ```tsx
 import {
-  Users,        // People/Candidates
-  UserPlus,     // Add User
-  Search,       // Search
-  Filter,       // Filter
-  Settings,     // Settings
-  Bell,         // Notifications
-  LogOut,       // Logout
-  Edit2,        // Edit
-  Trash2,       // Delete
-  Check,        // Success
-  X,            // Close/Cancel
-  AlertCircle,  // Error/Warning
-  TrendingUp,   // Growth
-  DollarSign,   // Money
-  Clock,        // Time
-  Phone,        // Phone
-  Mail,         // Email
-} from 'lucide-react';
+  Users, // People/Candidates
+  UserPlus, // Add User
+  Search, // Search
+  Filter, // Filter
+  Settings, // Settings
+  Bell, // Notifications
+  LogOut, // Logout
+  Edit2, // Edit
+  Trash2, // Delete
+  Check, // Success
+  X, // Close/Cancel
+  AlertCircle, // Error/Warning
+  TrendingUp, // Growth
+  DollarSign, // Money
+  Clock, // Time
+  Phone, // Phone
+  Mail, // Email
+} from "lucide-react";
 ```
 
 ---
@@ -229,21 +235,23 @@ import {
 ## 🎨 Gradient Examples
 
 ### Background Gradients
+
 ```css
 .gradient-primary {
-  background: linear-gradient(135deg, #3B82F6 0%, #6366F1 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
 }
 
 .gradient-success {
-  background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
 }
 
 .gradient-warning {
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
 }
 ```
 
 ### Text Gradients
+
 ```tsx
 <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
   Gradient Text
@@ -261,17 +269,17 @@ const [filter, setFilter] = useState("all");
 // Apply filters
 useEffect(() => {
   let result = [...data];
-  
+
   if (search) {
-    result = result.filter(item => 
-      item.name.toLowerCase().includes(search.toLowerCase())
+    result = result.filter((item) =>
+      item.name.toLowerCase().includes(search.toLowerCase()),
     );
   }
-  
+
   if (filter !== "all") {
-    result = result.filter(item => item.status === filter);
+    result = result.filter((item) => item.status === filter);
   }
-  
+
   setFilteredData(result);
 }, [search, filter, data]);
 ```
@@ -304,11 +312,13 @@ useEffect(() => {
 ## 🎯 Loading States
 
 ### Spinner
+
 ```tsx
 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
 ```
 
 ### Skeleton
+
 ```tsx
 <div className="space-y-4">
   <div className="h-12 bg-gray-200 rounded animate-pulse" />
@@ -328,9 +338,7 @@ useEffect(() => {
     animate={{ opacity: 1, scale: 1 }}
     className="bg-white rounded-2xl shadow-2xl w-full max-w-lg"
   >
-    <div className="p-6">
-      {/* Modal content */}
-    </div>
+    <div className="p-6">{/* Modal content */}</div>
   </motion.div>
 </div>
 ```
@@ -356,11 +364,13 @@ useEffect(() => {
 ## ⚡ Performance Tips
 
 1. **Use memo for expensive components**
+
 ```tsx
 const MemoizedComponent = React.memo(Component);
 ```
 
 2. **Debounce search inputs**
+
 ```tsx
 useEffect(() => {
   const timeout = setTimeout(() => {
@@ -371,8 +381,9 @@ useEffect(() => {
 ```
 
 3. **Lazy load heavy components**
+
 ```tsx
-const HeavyComponent = lazy(() => import('./HeavyComponent'));
+const HeavyComponent = lazy(() => import("./HeavyComponent"));
 ```
 
 ---
@@ -393,6 +404,7 @@ const HeavyComponent = lazy(() => import('./HeavyComponent'));
 ---
 
 **Pro Tips**:
+
 - Always use consistent spacing (multiples of 4px)
 - Keep animations subtle (300ms or less)
 - Use semantic HTML elements

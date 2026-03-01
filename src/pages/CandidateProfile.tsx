@@ -10,29 +10,20 @@ import {
   Edit2,
   Trash2,
   Building2,
+  UserPlus,
 } from "lucide-react";
-import { format } from "date-fns";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import AssignAgentModal from "../components/AssignAgentModal";
 
 const CandidateProfile: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [candidate, setCandidate] = useState<any>(null);
-  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showAssignAgentModal, setShowAssignAgentModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [paymentForm, setPaymentForm] = useState({
-    amount: "",
-    payment_type: "visa",
-    payment_method: "cash",
-    transaction_id: "",
-    notes: "",
-  });
 
   useEffect(() => {
     fetchData();
@@ -40,9 +31,8 @@ const CandidateProfile: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      const [cRes, pRes, employersRes] = await Promise.all([
+      const [cRes, employersRes] = await Promise.all([
         api.get(`/candidates/${id}`),
-        api.get(`/payments/candidate/${id}`),
         api.get(`/employers/candidate/${id}`),
       ]);
       setCandidate({
@@ -50,7 +40,6 @@ const CandidateProfile: React.FC = () => {
         connected_employers:
           employersRes.data?.data || cRes.data?.connected_employers || [],
       });
-      setPayments(pRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,117 +79,42 @@ const CandidateProfile: React.FC = () => {
     }
   };
 
-  const handleDownloadReceipt = async (tranId: string) => {
-    if (!tranId) {
-      alert("No Transaction ID found for this payment.");
-      return;
-    }
-
+  const handleDisconnectAgent = async (agentId: number) => {
+    if (!confirm("Disconnect this agent from candidate?")) return;
     try {
-      const response = await api.get(`/payments/transaction/${tranId}`);
-      const payment = response.data;
-
-      const doc = new jsPDF();
-      doc.setFontSize(22);
-      doc.setTextColor(79, 70, 229);
-      doc.text("PAYMENT RECEIPT", 105, 20, { align: "center" });
-
-      doc.setFontSize(10);
-      doc.setTextColor(100, 116, 139);
-      doc.text(
-        `Date: ${new Date(payment.created_at).toLocaleDateString()}`,
-        20,
-        35,
-      );
-      doc.text(`Receipt No: #REC-${payment.id}`, 20, 40);
-      doc.text(`Transaction ID: ${payment.transaction_id}`, 20, 45);
-
-      doc.setDrawColor(226, 232, 240);
-      doc.line(20, 55, 190, 55);
-
-      doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text("Candidate Details:", 20, 65);
-      doc.setFontSize(10);
-      doc.setTextColor(51, 65, 85);
-      doc.text(`Name: ${payment.candidate_name}`, 20, 72);
-      doc.text(`Phone: ${payment.candidate_phone}`, 20, 77);
-      doc.text(`Email: ${payment.candidate_email}`, 20, 82);
-
-      autoTable(doc, {
-        startY: 95,
-        head: [["Description", "Method", "Amount"]],
-        body: [
-          [
-            payment.payment_type.toUpperCase(),
-            payment.payment_method.toUpperCase(),
-            `BDT ${payment.amount.toLocaleString()}`,
-          ],
-        ],
-        theme: "striped",
-        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255] },
-        styles: { fontSize: 10, cellPadding: 5 },
-      });
-
-      const finalY = (doc as any).lastAutoTable.finalY + 15;
-      doc.setFontSize(12);
-      doc.setTextColor(15, 23, 42);
-      doc.text(
-        `Total Paid: BDT ${payment.amount.toLocaleString()}`,
-        190,
-        finalY,
-        { align: "right" },
-      );
-
-      doc.setFontSize(10);
-      doc.setTextColor(148, 163, 184);
-      doc.text("Thank you for your payment.", 105, 270, { align: "center" });
-      doc.text(
-        "This is a computer-generated receipt and does not require a signature.",
-        105,
-        275,
-        { align: "center" },
-      );
-
-      doc.save(`Receipt_${payment.transaction_id}.pdf`);
-    } catch (error: any) {
-      console.error("Failed to download receipt:", error);
-      alert(error.response?.data?.message || "Failed to generate receipt.");
+      await api.delete(`/candidates/${id}/agents/${agentId}`);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to disconnect agent");
     }
   };
 
-  const handlePaymentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleDisconnectEmployer = async (employerId: number) => {
+    if (!confirm("Disconnect this employer from candidate?")) return;
     try {
-      if (paymentForm.payment_method === "sslcommerz") {
-        const response = await api.post("/sslcommerz/init", {
-          candidate_id: id,
-          amount: parseFloat(paymentForm.amount),
-          payment_type: paymentForm.payment_type,
-        });
-        window.open(response.data.url, "_blank");
-        setShowPaymentModal(false);
-        return;
-      }
-
-      await api.post("/payments", { ...paymentForm, candidate_id: id });
-      setShowPaymentModal(false);
-      setPaymentForm({
-        amount: "",
-        payment_type: "visa",
-        payment_method: "cash",
-        transaction_id: "",
-        notes: "",
-      });
+      await api.delete(`/employers/${employerId}/candidates/${id}`);
       fetchData();
     } catch (err: any) {
-      alert(err.response?.data?.message || "Payment failed");
+      alert(err.response?.data?.message || "Failed to disconnect employer");
     }
   };
 
   if (loading) return <div className="p-8 text-center">Loading profile...</div>;
   if (!candidate)
     return <div className="p-8 text-center">Candidate not found</div>;
+  const connectedAgents = Array.isArray(candidate.connected_agents)
+    ? candidate.connected_agents
+    : [];
+  const uniqueConnectedAgents = connectedAgents
+    .filter(
+      (agent: any, index: number, arr: any[]) =>
+        index === arr.findIndex((a: any) => Number(a.id) === Number(agent.id)),
+    )
+    .sort((a: any, b: any) => {
+      if (Number(a.id) === Number(candidate.agent_id)) return -1;
+      if (Number(b.id) === Number(candidate.agent_id)) return 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -213,6 +127,16 @@ const CandidateProfile: React.FC = () => {
           <span>Back to List</span>
         </button>
         <div className="flex items-center space-x-3">
+          {["super_admin", "admin"].includes(user?.role || "") &&
+            !candidate?.agent_id && (
+            <button
+              onClick={() => setShowAssignAgentModal(true)}
+              className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-blue-700 transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Assign Agent</span>
+            </button>
+            )}
           {!["accountant", "agent"].includes(user?.role || "") && (
             <Link
               to={`/candidates/${id}/edit`}
@@ -221,17 +145,6 @@ const CandidateProfile: React.FC = () => {
               <Edit2 className="w-4 h-4" />
               <span>Edit Profile</span>
             </Link>
-          )}
-          {["super_admin", "admin", "accountant"].includes(
-            user?.role || "",
-          ) && (
-            <button
-              onClick={() => setShowPaymentModal(true)}
-              className="flex items-center space-x-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-semibold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Payment</span>
-            </button>
           )}
         </div>
       </div>
@@ -271,12 +184,49 @@ const CandidateProfile: React.FC = () => {
                   {candidate.status}
                 </span>
               </div>
-              {candidate.agent_name && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-500">Agent</span>
-                  <span className="text-slate-900 font-medium">
-                    {candidate.agent_name}
-                  </span>
+            </div>
+
+            <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  Connected Agents
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">
+                  {uniqueConnectedAgents.length}
+                </span>
+              </div>
+
+              {uniqueConnectedAgents.length === 0 ? (
+                <p className="text-sm text-slate-500">No agent connected yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {uniqueConnectedAgents.map((agent: any) => (
+                    <div
+                      key={`${agent.id}-${agent.connection_date || agent.name}`}
+                      className="p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <Link to={`/agents/${agent.id}`} className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-800 truncate">
+                            {agent.name}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {agent.email}
+                          </p>
+                        </Link>
+                        {["super_admin", "admin"].includes(user?.role || "") && (
+                          <button
+                            type="button"
+                            onClick={() => handleDisconnectAgent(Number(agent.id))}
+                            className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
+                            title="Disconnect agent"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
@@ -299,28 +249,43 @@ const CandidateProfile: React.FC = () => {
               ) : (
                 <div className="space-y-2">
                   {candidate.connected_employers.map((employer: any) => (
-                    <Link
+                    <div
                       key={`${employer.id}-${employer.connection_date}`}
-                      to={`/employers/${employer.id}`}
-                      className="block p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
+                      className="p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
-                          <span className="text-sm font-medium text-slate-800 truncate">
-                            {employer.company_name}
+                      <div className="flex items-start justify-between gap-3">
+                        <Link to={`/employers/${employer.id}`} className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0 mt-0.5" />
+                            <span className="text-sm font-medium text-slate-800 truncate">
+                              {employer.company_name}
+                            </span>
+                          </div>
+                          {employer.position && (
+                            <p className="text-xs text-slate-500 mt-1">
+                              Position: {employer.position}
+                            </p>
+                          )}
+                        </Link>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500 capitalize">
+                            {employer.status || "active"}
                           </span>
+                          {["super_admin", "admin"].includes(user?.role || "") && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDisconnectEmployer(Number(employer.id))
+                              }
+                              className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
+                              title="Disconnect employer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        <span className="text-xs text-slate-500 capitalize">
-                          {employer.status || "active"}
-                        </span>
                       </div>
-                      {employer.position && (
-                        <p className="text-xs text-slate-500 mt-1">
-                          Position: {employer.position}
-                        </p>
-                      )}
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
@@ -363,53 +328,6 @@ const CandidateProfile: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl">
-            <h3 className="text-slate-400 text-sm font-medium mb-4">
-              Financial Overview
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-slate-400 text-xs uppercase">
-                  Total Package
-                </p>
-                <p className="text-2xl font-bold">
-                  ৳{candidate.package_amount?.toLocaleString()}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-slate-400 text-xs uppercase">Paid</p>
-                  <p className="text-lg font-bold text-emerald-400">
-                    ৳{candidate.total_paid?.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs uppercase">Due</p>
-                  <p className="text-lg font-bold text-red-400">
-                    ৳{candidate.due_amount?.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 pt-4 border-t border-slate-700">
-                <div className="w-full bg-slate-700 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-2 rounded-full transition-all"
-                    style={{
-                      width: `${((candidate.total_paid || 0) / (candidate.package_amount || 1)) * 100}%`,
-                    }}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 mt-2 text-center">
-                  {Math.round(
-                    ((candidate.total_paid || 0) /
-                      (candidate.package_amount || 1)) *
-                      100,
-                  )}
-                  % Complete
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Ledger & Documents */}
@@ -465,7 +383,7 @@ const CandidateProfile: React.FC = () => {
                       >
                         <Download className="w-5 h-5" />
                       </a>
-                      {["super_admin", "admin", "agent"].includes(
+                      {["super_admin", "admin"].includes(
                         user?.role || "",
                       ) && (
                         <button
@@ -483,81 +401,6 @@ const CandidateProfile: React.FC = () => {
             )}
           </div>
 
-          {/* Payment History */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-gradient-to-r from-gray-50 to-blue-50">
-              <h2 className="text-lg font-bold text-slate-900">
-                Candidate Ledger
-              </h2>
-              <p className="text-sm text-slate-500 mt-1">
-                Complete payment history
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Date</th>
-                    <th className="px-6 py-4 font-semibold">Type</th>
-                    <th className="px-6 py-4 font-semibold">Method</th>
-                    <th className="px-6 py-4 font-semibold">Amount</th>
-                    <th className="px-6 py-4 font-semibold">Transaction ID</th>
-                    <th className="px-6 py-4 font-semibold">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {payments.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center">
-                        <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-slate-500">
-                          No payments recorded yet.
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    payments.map((p) => (
-                      <tr
-                        key={p.id}
-                        className="hover:bg-blue-50 transition-colors"
-                      >
-                        <td className="px-6 py-4 text-sm text-slate-600">
-                          {format(new Date(p.created_at), "MMM dd, yyyy")}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-medium capitalize">
-                            {p.payment_type}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-slate-600 capitalize">
-                          {p.payment_method}
-                        </td>
-                        <td className="px-6 py-4 text-slate-900 font-bold">
-                          ৳{p.amount?.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-slate-500 font-mono">
-                          {p.transaction_id || "-"}
-                        </td>
-                        <td className="px-6 py-4">
-                          {p.transaction_id && (
-                            <button
-                              onClick={() =>
-                                handleDownloadReceipt(p.transaction_id)
-                              }
-                              className="text-indigo-600 hover:text-indigo-900 flex items-center space-x-1 text-xs font-bold"
-                            >
-                              <Download className="w-3 h-3" />
-                              <span>Receipt</span>
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -594,119 +437,16 @@ const CandidateProfile: React.FC = () => {
         </div>
       )}
 
-      {/* Payment Modal */}
-      {showPaymentModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-blue-50">
-              <h3 className="text-lg font-bold text-slate-900">
-                Record New Payment
-              </h3>
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-slate-400 hover:text-slate-600"
-              >
-                <Plus className="w-6 h-6 rotate-45" />
-              </button>
-            </div>
-            <form onSubmit={handlePaymentSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Amount (৳)
-                </label>
-                <input
-                  type="number"
-                  required
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  value={paymentForm.amount}
-                  onChange={(e) =>
-                    setPaymentForm({ ...paymentForm, amount: e.target.value })
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Type
-                  </label>
-                  <select
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={paymentForm.payment_type}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        payment_type: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="visa">Visa</option>
-                    <option value="medical">Medical</option>
-                    <option value="ticket">Ticket</option>
-                    <option value="service">Service</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Method
-                  </label>
-                  <select
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={paymentForm.payment_method}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        payment_method: e.target.value,
-                      })
-                    }
-                  >
-                    <option value="cash">Cash Payment</option>
-                    <option value="sslcommerz">SSLCommerz (Online)</option>
-                  </select>
-                </div>
-              </div>
-              {paymentForm.payment_method !== "sslcommerz" && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Transaction ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                    value={paymentForm.transaction_id}
-                    onChange={(e) =>
-                      setPaymentForm({
-                        ...paymentForm,
-                        transaction_id: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Notes
-                </label>
-                <textarea
-                  className="w-full px-4 py-2 rounded-xl border border-slate-200 outline-none focus:ring-2 focus:ring-emerald-500"
-                  rows={2}
-                  value={paymentForm.notes}
-                  onChange={(e) =>
-                    setPaymentForm({ ...paymentForm, notes: e.target.value })
-                  }
-                />
-              </div>
-              <button
-                type="submit"
-                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg mt-4 ${paymentForm.payment_method === "sslcommerz" ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100" : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-100"}`}
-              >
-                {paymentForm.payment_method === "sslcommerz"
-                  ? "Pay with SSLCommerz"
-                  : "Confirm Payment"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <AssignAgentModal
+        candidateId={Number(id)}
+        candidateName={candidate.name}
+        currentAgentId={candidate.agent_id || 0}
+        currentAgentName={candidate.agent_name || "N/A"}
+        excludedAgentIds={uniqueConnectedAgents.map((a: any) => Number(a.id))}
+        isOpen={showAssignAgentModal}
+        onClose={() => setShowAssignAgentModal(false)}
+        onAssign={fetchData}
+      />
     </div>
   );
 };

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { User, UserRole } from "../types";
-import { Search, Filter, Settings, Edit2, Check, X, Users } from "lucide-react";
+import { Search, Filter, Settings, Edit2, Check, X, Users, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 
 const UserManagement: React.FC = () => {
@@ -10,6 +10,7 @@ const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("agent");
   const [message, setMessage] = useState("");
@@ -37,9 +38,12 @@ const UserManagement: React.FC = () => {
 
   useEffect(() => {
     if (hasFetched) {
-      fetchUsers();
+      const timer = setTimeout(() => {
+        fetchUsers();
+      }, 250);
+      return () => clearTimeout(timer);
     }
-  }, [page]);
+  }, [page, search, hasFetched]);
 
   // Apply search and filter locally
   useEffect(() => {
@@ -47,10 +51,11 @@ const UserManagement: React.FC = () => {
   }, [search, filterStatus, users]);
 
   const fetchUsers = async () => {
+    const showInitialLoader = !hasLoaded;
     try {
-      setLoading(true);
+      if (showInitialLoader) setLoading(true);
       setError("");
-      const params: any = { page, limit };
+      const params: any = { page, limit, search };
       const response = await api.get("/auth/users", { params });
       const respData = response.data;
       const list = Array.isArray(respData?.data) ? respData.data : [];
@@ -62,23 +67,15 @@ const UserManagement: React.FC = () => {
       const errorMsg = err.response?.data?.message || err.message || "Failed to fetch users";
       setError(errorMsg);
     } finally {
-      setLoading(false);
+      if (showInitialLoader) {
+        setLoading(false);
+        setHasLoaded(true);
+      }
     }
   };
 
   const applyFilters = () => {
     let result = [...users];
-
-    // Search filter
-    if (search.trim()) {
-      const searchLower = search.toLowerCase();
-      result = result.filter(
-        (user) =>
-          user.name.toLowerCase().includes(searchLower) ||
-          user.email.toLowerCase().includes(searchLower) ||
-          user.role.toLowerCase().includes(searchLower)
-      );
-    }
 
     // Role filter
     if (filterStatus !== "all") {
@@ -119,8 +116,21 @@ const UserManagement: React.FC = () => {
     setError("");
   };
 
+  const handleDelete = async (userId: number) => {
+    if (!confirm("Delete this user?")) return;
+    try {
+      await api.delete(`/auth/users/${userId}`);
+      setMessage("User deleted successfully");
+      fetchUsers();
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to delete user");
+    }
+  };
+
   const clearSearch = () => {
     setSearch("");
+    setPage(1);
     setFilterStatus("all");
   };
 
@@ -192,7 +202,10 @@ const UserManagement: React.FC = () => {
           )}
         </div>
         <button 
-          onClick={fetchUsers}
+          onClick={() => {
+            setPage(1);
+            fetchUsers();
+          }}
           className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
         >
           <Search className="w-5 h-5" />
@@ -405,11 +418,16 @@ const UserManagement: React.FC = () => {
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    <button className="text-gray-400 hover:text-gray-600">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                      </svg>
-                    </button>
+                    {authUser && u.id !== authUser.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(u.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Delete user"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </motion.tr>
               );

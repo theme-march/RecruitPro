@@ -7,10 +7,7 @@ import { initDb } from "./src/db.js";
 import authRoutes from "./src/routes/auth.js";
 import candidateRoutes from "./src/routes/candidates.js";
 import agentRoutes from "./src/routes/agents.js";
-import paymentRoutes from "./src/routes/payments.js";
 import dashboardRoutes from "./src/routes/dashboard.js";
-import sslRoutes from "./src/routes/sslcommerz.js";
-import packageRoutes from "./src/routes/packages.js";
 import employerRoutes from "./src/routes/employers.js";
 
 // Initialize Database
@@ -42,10 +39,7 @@ async function startServer() {
   app.use("/api/auth", authRoutes);
   app.use("/api/candidates", candidateRoutes);
   app.use("/api/agents", agentRoutes);
-  app.use("/api/payments", paymentRoutes);
   app.use("/api/dashboard", dashboardRoutes);
-  app.use("/api/packages", packageRoutes);
-  app.use("/api/sslcommerz", sslRoutes);
   app.use("/api/employers", employerRoutes);
 
   // Vite middleware for development

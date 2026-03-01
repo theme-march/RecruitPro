@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query, transaction } from '../db.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, authorizeRoles } from '../middleware/auth.js';
 import { User, UserRole } from '../types';
 
 const router = express.Router();
@@ -13,7 +13,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    const users = await query<User[]>('SELECT * FROM users WHERE email = ?', [email]);
+    const users = await query<User[]>('SELECT * FROM users WHERE email = ? AND is_deleted = 0', [email]);
     const user = users[0];
     if (!user) return res.status(400).json({ message: 'Invalid email or password' });
 
@@ -87,8 +87,10 @@ router.get('/users', authenticateToken, async (req: any, res) => {
     let whereClause = '';
     const params: any[] = [];
     if (search) {
-      whereClause = 'WHERE name LIKE ? OR email LIKE ?';
+      whereClause = 'WHERE is_deleted = 0 AND (name LIKE ? OR email LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
+    } else {
+      whereClause = 'WHERE is_deleted = 0';
     }
 
     const dataQuery = `SELECT id, name, email, role, created_at FROM users ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
@@ -126,7 +128,7 @@ router.put('/users/:id/role', authenticateToken, async (req: any, res) => {
     }
 
     const updated = await query<any>(
-      'UPDATE users SET role = ? WHERE id = ?',
+      'UPDATE users SET role = ? WHERE id = ? AND is_deleted = 0',
       [newRole, id]
     );
 
@@ -138,6 +140,34 @@ router.put('/users/:id/role', authenticateToken, async (req: any, res) => {
   } catch (error) {
     console.error('Update role error:', error);
     res.status(500).json({ message: 'Failed to update user role' });
+  }
+});
+
+// Soft delete user (Super Admin only)
+router.delete('/users/:id', authenticateToken, authorizeRoles('super_admin'), async (req: any, res) => {
+  try {
+    const userId = parseInt(req.params.id, 10);
+    if (Number.isNaN(userId)) {
+      return res.status(400).json({ message: 'Invalid user id' });
+    }
+
+    if (userId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot delete your own account' });
+    }
+
+    const deleted = await query<any>(
+      'UPDATE users SET is_deleted = 1, deleted_at = NOW() WHERE id = ? AND is_deleted = 0',
+      [userId]
+    );
+
+    if (deleted.affectedRows === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ message: 'Failed to delete user' });
   }
 });
 

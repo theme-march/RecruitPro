@@ -12,15 +12,11 @@ import AgentList from './pages/AgentList';
 import AgentProfile from './pages/AgentProfile';
 import EditAgent from './pages/EditAgent';
 import UserManagement from './pages/UserManagement';
-import PackageManagement from './pages/PackageManagement';
 import EmployerList from './pages/EmployerList';
 import AddEmployer from './pages/AddEmployer';
 import EmployerProfile from './pages/EmployerProfile';
 import EditEmployer from './pages/EditEmployer';
-import PaymentSuccess from './pages/PaymentSuccess';
-import PaymentFail from './pages/PaymentFail';
-import PaymentCancel from './pages/PaymentCancel';
-import PaymentError from './pages/PaymentError';
+import Reports from './pages/Reports';
 
 export default function App() {
   return (
@@ -28,10 +24,6 @@ export default function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/payment/success/:tranId" element={<PaymentSuccess />} />
-          <Route path="/payment/fail" element={<PaymentFail />} />
-          <Route path="/payment/cancel" element={<PaymentCancel />} />
-          <Route path="/payment-error" element={<PaymentError />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/candidates" element={<CandidateList />} />
@@ -46,7 +38,7 @@ export default function App() {
             <Route path="/employers/:id" element={<EmployerProfile />} />
             <Route path="/employers/:id/edit" element={<EditEmployer />} />
             <Route path="/users" element={<UserManagement />} />
-            <Route path="/packages" element={<PackageManagement />} />
+            <Route path="/reports" element={<Reports />} />
           </Route>
         </Routes>
       </Router>

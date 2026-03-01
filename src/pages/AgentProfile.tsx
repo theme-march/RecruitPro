@@ -99,14 +99,41 @@ const AgentProfile: React.FC = () => {
     }
   };
 
+  const handleDisconnectEmployer = async (employerId: number) => {
+    if (!confirm("Disconnect this employer from this agent?")) return;
+    try {
+      await api.delete(`/employers/${employerId}/agents/${id}`);
+      await fetchAgentData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to disconnect employer");
+    }
+  };
+
+  const handleDisconnectCandidate = async (candidateId: number) => {
+    if (!confirm("Remove this candidate from this agent?")) return;
+    try {
+      await api.delete(`/candidates/${candidateId}/agents/${id}`);
+      await fetchAgentData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to remove candidate");
+    }
+  };
+
   const fetchAssignableCandidates = async () => {
     try {
       const response = await api.get("/candidates", {
         params: { page: 1, limit: 1000 },
       });
       const list = response.data?.data || [];
+      const assignedCandidateIds = new Set(
+        (data?.candidates || []).map((candidate: any) => Number(candidate.id)),
+      );
       const filtered = Array.isArray(list)
-        ? list.filter((candidate: any) => !candidate.agent_id)
+        ? list.filter(
+            (candidate: any) =>
+              !assignedCandidateIds.has(Number(candidate.id)) &&
+              (!candidate.agent_id || Number(candidate.agent_id) === 0),
+          )
         : [];
       setAssignCandidates(filtered);
       setAssignError("");
@@ -149,14 +176,6 @@ const AgentProfile: React.FC = () => {
   if (!data) return <div className="p-8 text-center">Agent not found</div>;
 
   const { agent, candidates } = data;
-  const totalCollection = candidates.reduce((sum: number, c: any) => {
-    const paid = parseFloat(c.total_paid as any) || 0;
-    return sum + paid;
-  }, 0);
-  const totalDue = candidates.reduce((sum: number, c: any) => {
-    const due = parseFloat(c.due_amount as any) || 0;
-    return sum + due;
-  }, 0);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -168,15 +187,17 @@ const AgentProfile: React.FC = () => {
           <ArrowLeft className="w-5 h-5" />
           <span>Back to List</span>
         </button>
-        {["super_admin", "admin"].includes(user?.role || "") && (
-          <Link
-            to={`/agents/${id}/edit`}
-            className="flex items-center space-x-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-200 transition-all"
-          >
-            <Edit2 className="w-4 h-4" />
-            <span>Edit Profile</span>
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {["super_admin", "admin"].includes(user?.role || "") && (
+            <Link
+              to={`/agents/${id}/edit`}
+              className="flex items-center space-x-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-xl font-semibold hover:bg-slate-200 transition-all"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span>Edit Profile</span>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -203,12 +224,6 @@ const AgentProfile: React.FC = () => {
                   {agent.address || "N/A"}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-500">Commission</span>
-                <span className="text-slate-900 font-medium">
-                  {agent.commission_rate}%
-                </span>
-              </div>
             </div>
 
             <div className="mt-6 pt-6 border-t border-slate-100 space-y-3">
@@ -225,52 +240,48 @@ const AgentProfile: React.FC = () => {
               ) : (
                 <div className="space-y-2">
                   {connectedEmployers.map((employer: any) => (
-                    <Link
+                    <div
                       key={employer.id}
-                      to={`/employers/${employer.id}`}
                       className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors"
                     >
-                      <div className="flex items-center space-x-2 min-w-0">
+                      <Link
+                        to={`/employers/${employer.id}`}
+                        className="flex items-center space-x-2 min-w-0 flex-1"
+                      >
                         <Building2 className="w-4 h-4 text-indigo-600 flex-shrink-0" />
-                        <span className="text-sm font-medium text-slate-800 truncate">
-                          {employer.company_name}
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">
+                            {employer.company_name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {Number(employer.candidate_count || 0)} Candidates
+                          </p>
+                        </div>
+                      </Link>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-slate-500 capitalize">
+                          {employer.status || "active"}
                         </span>
+                        {["super_admin", "admin"].includes(user?.role || "") && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDisconnectEmployer(Number(employer.id))
+                            }
+                            className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
+                            title="Disconnect employer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
-                      <span className="text-xs text-slate-500 capitalize">
-                        {employer.status || "active"}
-                      </span>
-                    </Link>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-6 text-white shadow-xl">
-            <h3 className="text-slate-400 text-sm font-medium mb-4">
-              Financial Overview
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <p className="text-slate-400 text-xs uppercase">Candidates</p>
-                <p className="text-2xl font-bold">{candidates.length}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-slate-400 text-xs uppercase">Collection</p>
-                  <p className="text-lg font-bold text-emerald-400">
-                    BDT {totalCollection.toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-slate-400 text-xs uppercase">Due</p>
-                  <p className="text-lg font-bold text-red-400">
-                    BDT {totalDue.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         <div className="lg:col-span-2 space-y-6">
@@ -321,13 +332,15 @@ const AgentProfile: React.FC = () => {
                       >
                         <Download className="w-5 h-5" />
                       </a>
-                      <button
-                        onClick={() => handleDeleteDocument(doc.id)}
-                        className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      {["super_admin", "admin"].includes(user?.role || "") && (
+                        <button
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="p-2 hover:bg-red-100 rounded-lg text-red-600 transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -378,15 +391,14 @@ const AgentProfile: React.FC = () => {
                   <tr>
                     <th className="px-6 py-4 font-semibold">Candidate</th>
                     <th className="px-6 py-4 font-semibold">Passport</th>
-                    <th className="px-6 py-4 font-semibold">Paid</th>
-                    <th className="px-6 py-4 font-semibold">Due</th>
+                    <th className="px-6 py-4 font-semibold">Employers</th>
                     <th className="px-6 py-4 font-semibold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {candidates.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center">
+                      <td colSpan={4} className="px-6 py-12 text-center">
                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                         <p className="text-slate-500">
                           No candidates registered yet.
@@ -402,19 +414,36 @@ const AgentProfile: React.FC = () => {
                         <td className="px-6 py-4 text-sm text-slate-600 font-mono">
                           {candidate.passport_number}
                         </td>
-                        <td className="px-6 py-4 text-emerald-600 font-bold">
-                          BDT {Number(candidate.total_paid || 0).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 text-red-600 font-bold">
-                          BDT {Number(candidate.due_amount || 0).toLocaleString()}
+                        <td className="px-6 py-4 text-sm text-slate-600">
+                          {candidate.employer_names ? (
+                            <span className="line-clamp-2">
+                              {candidate.employer_names}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">Not connected</span>
+                          )}
                         </td>
                         <td className="px-6 py-4">
-                          <Link
-                            to={`/candidates/${candidate.id}`}
-                            className="text-indigo-600 hover:text-indigo-900 text-sm font-bold"
-                          >
-                            View
-                          </Link>
+                          <div className="flex items-center gap-3">
+                            <Link
+                              to={`/candidates/${candidate.id}`}
+                              className="text-indigo-600 hover:text-indigo-900 text-sm font-bold"
+                            >
+                              View
+                            </Link>
+                            {["super_admin", "admin"].includes(user?.role || "") && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDisconnectCandidate(Number(candidate.id))
+                                }
+                                className="text-red-600 hover:text-red-700"
+                                title="Remove from this agent"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -493,8 +522,7 @@ const AgentProfile: React.FC = () => {
                 </select>
                 {assignCandidates.length === 0 && (
                   <p className="mt-2 text-xs text-slate-500">
-                    No unassigned candidate available. To change assigned
-                    candidate, use Edit Candidate Profile.
+                    No more candidate available for this agent.
                   </p>
                 )}
               </div>

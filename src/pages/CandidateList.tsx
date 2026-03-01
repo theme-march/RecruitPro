@@ -7,11 +7,9 @@ import {
   Filter,
   X,
   Phone,
-  CreditCard,
   FileText,
-  Edit2,
+  Trash2,
 } from "lucide-react";
-import AssignAgentModal from "../components/AssignAgentModal";
 
 interface Candidate {
   id: number;
@@ -31,53 +29,50 @@ const CandidateList: React.FC = () => {
   const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [page, setPage] = useState(1);
   const [limit] = useState(10);
   const [total, setTotal] = useState(0);
   const [statusFilter, setStatusFilter] = useState("all");
   const [userRole, setUserRole] = useState<string>("");
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(
-    null,
-  );
 
   useEffect(() => {
-    fetchCandidates();
     const user = JSON.parse(localStorage.getItem("user") || "{}");
     setUserRole(user.role || "");
-  }, [page]);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchCandidates();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [page, search]);
 
   useEffect(() => {
     applyFilters();
   }, [search, statusFilter, candidates]);
 
   const fetchCandidates = async () => {
+    const showInitialLoader = !hasLoaded;
     try {
-      setLoading(true);
+      if (showInitialLoader) setLoading(true);
       const response = await api.get("/candidates", {
-        params: { page, limit },
+        params: { page, limit, search },
       });
       setCandidates(response.data.data || []);
       setTotal(response.data.total || 0);
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (showInitialLoader) {
+        setLoading(false);
+        setHasLoaded(true);
+      }
     }
   };
 
   const applyFilters = () => {
     let result = [...candidates];
-
-    if (search.trim()) {
-      const s = search.toLowerCase();
-      result = result.filter(
-        (c) =>
-          c.name.toLowerCase().includes(s) ||
-          c.passport_number?.toLowerCase().includes(s) ||
-          c.phone?.toLowerCase().includes(s),
-      );
-    }
 
     if (statusFilter !== "all") {
       result = result.filter((c) => c.status === statusFilter);
@@ -88,6 +83,8 @@ const CandidateList: React.FC = () => {
 
   const totalPages = Math.ceil(total / limit);
 
+  const canDelete = ["super_admin", "admin", "agent"].includes(userRole);
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: "bg-yellow-100 text-yellow-700",
@@ -96,6 +93,16 @@ const CandidateList: React.FC = () => {
       completed: "bg-green-100 text-green-700",
     };
     return colors[status] || "bg-gray-100 text-gray-700";
+  };
+
+  const handleDelete = async (candidateId: number) => {
+    if (!confirm("Delete this candidate?")) return;
+    try {
+      await api.delete(`/candidates/${candidateId}`);
+      fetchCandidates();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to delete candidate");
+    }
   };
 
   if (loading) {
@@ -136,7 +143,10 @@ const CandidateList: React.FC = () => {
             />
             {search && (
               <button
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2"
               >
                 <X className="w-5 h-5 text-gray-400" />
@@ -196,7 +206,9 @@ const CandidateList: React.FC = () => {
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
                   Status
                 </th>
-                <th className="px-4 py-3"></th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                  Actions
+                </th>
               </tr>
             </thead>
 
@@ -217,21 +229,9 @@ const CandidateList: React.FC = () => {
 
                     {["super_admin", "admin"].includes(userRole) && (
                       <td className="px-4 py-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">
-                            {c.agent_name || "No Agent"}
-                          </span>
-                          <button
-                            onClick={() => {
-                              setSelectedCandidate(c);
-                              setAssignModalOpen(true);
-                            }}
-                            className="ml-2 text-blue-600 hover:text-blue-700 p-1"
-                            title="Reassign agent"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <span className="text-sm font-medium text-gray-900">
+                          {c.agent_name || "No Agent"}
+                        </span>
                       </td>
                     )}
 
@@ -268,13 +268,25 @@ const CandidateList: React.FC = () => {
                     </td>
 
                     <td className="px-4 py-4">
-                      <Link
-                        to={`/candidates/${c.id}`}
-                        className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                      >
-                        <FileText className="w-4 h-4" />
-                        View
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/candidates/${c.id}`}
+                          className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
+                        >
+                          <FileText className="w-4 h-4" />
+                          View
+                        </Link>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(c.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            title="Delete candidate"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -332,23 +344,6 @@ const CandidateList: React.FC = () => {
         </div>
       </div>
 
-      {selectedCandidate && (
-        <AssignAgentModal
-          candidateId={selectedCandidate.id}
-          candidateName={selectedCandidate.name}
-          currentAgentId={selectedCandidate.agent_id || 0}
-          currentAgentName={selectedCandidate.agent_name || "Unknown"}
-          isOpen={assignModalOpen}
-          onClose={() => {
-            setAssignModalOpen(false);
-            setSelectedCandidate(null);
-          }}
-          onAssign={() => {
-            setPage(1);
-            fetchCandidates();
-          }}
-        />
-      )}
     </>
   );
 };
